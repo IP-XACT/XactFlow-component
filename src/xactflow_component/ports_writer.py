@@ -21,6 +21,7 @@ from .common_writer import (
     add_clock_driver_body,
     add_drive_constraint,
     add_field_reference_group,
+    add_items,
     add_load_constraint,
     add_mode_refs,
     add_name_group,
@@ -194,8 +195,4 @@ def write_port(port: Port) -> etree._Element:
 
 
 def add_ports(parent: etree._Element, ports: Sequence[Port]) -> None:
-    if not ports:
-        return
-    container = sub(parent, "ports")
-    for port in ports:
-        container.append(write_port(port))
+    add_items(parent, "ports", ports, write_port)

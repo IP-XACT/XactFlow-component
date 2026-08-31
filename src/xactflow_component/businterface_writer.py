@@ -21,6 +21,7 @@ from ipxact.schema.businterface import (
 
 from .common_writer import (
     add_field_reference_group,
+    add_items,
     add_local_name_refs,
     add_mode_refs,
     add_name_group,
@@ -157,11 +158,7 @@ def write_bus_interface(bus_interface: BusInterface) -> etree._Element:
 
 
 def add_bus_interfaces(parent: etree._Element, bus_interfaces: Sequence[BusInterface]) -> None:
-    if not bus_interfaces:
-        return
-    container = sub(parent, "busInterfaces")
-    for bus_interface in bus_interfaces:
-        container.append(write_bus_interface(bus_interface))
+    add_items(parent, "busInterfaces", bus_interfaces, write_bus_interface)
 
 
 def write_indirect_interface(indirect_interface: IndirectInterface) -> etree._Element:
@@ -189,11 +186,7 @@ def write_indirect_interface(indirect_interface: IndirectInterface) -> etree._El
 
 
 def add_indirect_interfaces(parent: etree._Element, indirect_interfaces: Sequence[IndirectInterface]) -> None:
-    if not indirect_interfaces:
-        return
-    container = sub(parent, "indirectInterfaces")
-    for indirect_interface in indirect_interfaces:
-        container.append(write_indirect_interface(indirect_interface))
+    add_items(parent, "indirectInterfaces", indirect_interfaces, write_indirect_interface)
 
 
 def write_channel(channel: Channel) -> etree._Element:
@@ -205,8 +198,4 @@ def write_channel(channel: Channel) -> etree._Element:
 
 
 def add_channels(parent: etree._Element, channels: Sequence[Channel]) -> None:
-    if not channels:
-        return
-    container = sub(parent, "channels")
-    for channel in channels:
-        container.append(write_channel(channel))
+    add_items(parent, "channels", channels, write_channel)

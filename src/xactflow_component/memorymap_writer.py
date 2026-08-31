@@ -28,6 +28,7 @@ from ipxact.schema.common import MemoryArray
 
 from .common_writer import (
     add_bool,
+    add_items,
     add_mode_refs,
     add_name_group,
     add_parameters,
@@ -316,11 +317,7 @@ def write_memory_map(memory_map: MemoryMap) -> etree._Element:
 
 
 def add_memory_maps(parent: etree._Element, memory_maps: Sequence[MemoryMap]) -> None:
-    if not memory_maps:
-        return
-    container = sub(parent, "memoryMaps")
-    for memory_map in memory_maps:
-        container.append(write_memory_map(memory_map))
+    add_items(parent, "memoryMaps", memory_maps, write_memory_map)
 
 
 def _add_local_memory_map(parent: etree._Element, local_memory_map: LocalMemoryMap) -> None:
@@ -361,8 +358,4 @@ def write_address_space(address_space: AddressSpace) -> etree._Element:
 
 
 def add_address_spaces(parent: etree._Element, address_spaces: Sequence[AddressSpace]) -> None:
-    if not address_spaces:
-        return
-    container = sub(parent, "addressSpaces")
-    for address_space in address_spaces:
-        container.append(write_address_space(address_space))
+    add_items(parent, "addressSpaces", address_spaces, write_address_space)

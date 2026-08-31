@@ -82,6 +82,18 @@ def add_texts(parent: etree._Element, tag: str, values: Iterable[object]) -> Non
         sub(parent, tag, value)
 
 
+def add_items(parent: etree._Element, container_tag: str, items: Sequence[T], writer: Callable[[T], etree._Element]) -> None:
+    """Write container_tag holding one writer(item) per item, or nothing when items is empty.
+
+    Mirrors ipxact.parser.common_parser.parse_children, the same shape in reverse.
+    """
+    if not items:
+        return
+    container = sub(parent, container_tag)
+    for item in items:
+        container.append(writer(item))
+
+
 def add_name_group(
     parent: etree._Element,
     name: Optional[str],
@@ -270,19 +282,11 @@ def write_module_parameter(parameter: ModuleParameter) -> etree._Element:
 
 
 def add_parameters(parent: etree._Element, parameters: Sequence[Parameter]) -> None:
-    if not parameters:
-        return
-    container = sub(parent, "parameters")
-    for parameter in parameters:
-        container.append(write_parameter(parameter))
+    add_items(parent, "parameters", parameters, write_parameter)
 
 
 def add_module_parameters(parent: etree._Element, parameters: Sequence[ModuleParameter]) -> None:
-    if not parameters:
-        return
-    container = sub(parent, "moduleParameters")
-    for parameter in parameters:
-        container.append(write_module_parameter(parameter))
+    add_items(parent, "moduleParameters", parameters, write_module_parameter)
 
 
 def add_choices(parent: etree._Element, choices: Sequence[Choice]) -> None:
@@ -352,11 +356,7 @@ def write_file_set(file_set: FileSet) -> etree._Element:
 
 
 def add_file_sets(parent: etree._Element, file_sets: Sequence[FileSet]) -> None:
-    if not file_sets:
-        return
-    container = sub(parent, "fileSets")
-    for file_set in file_sets:
-        container.append(write_file_set(file_set))
+    add_items(parent, "fileSets", file_sets, write_file_set)
 
 
 def add_local_name_refs(parent: etree._Element, tag: str, names: Sequence[str]) -> None:
