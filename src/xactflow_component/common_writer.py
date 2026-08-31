@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence, TypeVar
 
 from lxml import etree
 
@@ -31,6 +31,9 @@ from ipxact.schema.ports import (
 from ipxact.schema.vlnv import VLNVRef
 
 NAMESPACE = "http://www.accellera.org/XMLSchema/IPXACT/1685-2022"
+_NSMAP = {"ipxact": NAMESPACE}
+
+T = TypeVar("T")
 
 
 def qn(tag: str) -> str:
@@ -44,7 +47,7 @@ def element(tag: str, text: object = None, /, **attrs: object) -> etree._Element
     tag and text are positional-only so that **attrs stays free for XML attributes that
     happen to be named "text", "help" or "tag" (ipxact:enumeration has two of them).
     """
-    elem = etree.Element(qn(tag), nsmap={"ipxact": NAMESPACE})
+    elem = etree.Element(qn(tag), nsmap=_NSMAP)
     for name, value in attrs.items():
         if value is not None:
             elem.set(name, str(value))
