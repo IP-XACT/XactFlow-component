@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xactflow-component"
+version = "0.1.0"
+description = "XactFlow exporter plugin that serializes an ipxact.Component into IEEE 1685-2022 IP-XACT XML."
+license = { text = "LGPL-3.0-only" }
+requires-python = ">=3.9"
+dependencies = [
+    "xactflow",
+    "ipxact-compiler",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.entry-points."xactflow.exporters"]
+component = "xactflow_component:ComponentExporter"
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+xactflow_component = ["py.typed"]
