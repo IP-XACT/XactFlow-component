@@ -79,6 +79,11 @@ planned later addition, not an oversight.
   (`resolve="immediate"`, `type="string"`, `misalignmentAllowed="true"`, `connectionRequired`
   false, and so on) are left out, which keeps the output close to hand-written IP-XACT and still
   round-trips exactly.
+- **Required XSD choices raise `ValueError` when no arm is set, instead of emitting invalid
+  XML.** Several dataclasses share one field across XSD contexts with different required-ness,
+  or expose independent sibling fields that the schema only allows together. Rather than silently
+  writing an incomplete element for these, the writer raises a specific error naming the missing
+  field.
 
 ## Known gaps
 

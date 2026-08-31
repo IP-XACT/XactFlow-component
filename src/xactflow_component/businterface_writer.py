@@ -50,6 +50,8 @@ def _add_port_map(parent: etree._Element, port_map: PortMap) -> None:
         sub(physical_port, "name", port_map.physical_port)
     elif port_map.logical_tie_off is not None:
         sub(elem, "logicalTieOff", port_map.logical_tie_off)
+    else:
+        raise ValueError("a port map requires physical_port or logical_tie_off")
     if port_map.is_informative:
         sub(elem, "isInformative", bool_str(True))
 
@@ -88,8 +90,10 @@ def _add_target(parent: etree._Element, target: TargetInterface) -> None:
 
 def _add_mirrored_target(parent: etree._Element, mirrored_target: MirroredTargetInterface) -> None:
     elem = sub(parent, "mirroredTarget")
-    if not mirrored_target.remap_addresses:
+    if not mirrored_target.remap_addresses and mirrored_target.range is None:
         return
+    if not mirrored_target.remap_addresses or mirrored_target.range is None:
+        raise ValueError("a mirrored target's base addresses require both remap_addresses and range")
     base_addresses = sub(elem, "baseAddresses")
     for remap_address in mirrored_target.remap_addresses:
         remap_elem = sub(base_addresses, "remapAddresses")
@@ -114,15 +118,21 @@ def _add_interface_mode(parent: etree._Element, bus_interface: BusInterface) -> 
     elif mode is InterfaceMode.TARGET:
         _add_target(parent, bus_interface.target or TargetInterface())
     elif mode is InterfaceMode.SYSTEM:
-        _add_system(parent, "system", bus_interface.system or SystemInterface(group=""))
+        if bus_interface.system is None:
+            raise ValueError("mode is SYSTEM but system is not set")
+        _add_system(parent, "system", bus_interface.system)
     elif mode is InterfaceMode.MIRRORED_TARGET:
         _add_mirrored_target(parent, bus_interface.mirrored_target or MirroredTargetInterface())
     elif mode is InterfaceMode.MIRRORED_INITIATOR:
         sub(parent, "mirroredInitiator")
     elif mode is InterfaceMode.MIRRORED_SYSTEM:
-        _add_system(parent, "mirroredSystem", bus_interface.mirrored_system or SystemInterface(group=""))
+        if bus_interface.mirrored_system is None:
+            raise ValueError("mode is MIRRORED_SYSTEM but mirrored_system is not set")
+        _add_system(parent, "mirroredSystem", bus_interface.mirrored_system)
     elif mode is InterfaceMode.MONITOR:
-        _add_monitor(parent, bus_interface.monitor or MonitorInterface(interface_mode=InterfaceMode.INITIATOR))
+        if bus_interface.monitor is None:
+            raise ValueError("mode is MONITOR but monitor is not set")
+        _add_monitor(parent, bus_interface.monitor)
     else:
         raise ValueError(f"unrecognized bus interface mode: {mode!r}")
 
@@ -167,8 +177,10 @@ def write_indirect_interface(indirect_interface: IndirectInterface) -> etree._El
     # memoryMapRef and transparentBridge are the two arms of a required choice.
     if indirect_interface.memory_map_ref is not None:
         sub(elem, "memoryMapRef", indirect_interface.memory_map_ref)
-    else:
+    elif indirect_interface.transparent_bridges:
         _add_transparent_bridges(elem, indirect_interface.transparent_bridges)
+    else:
+        raise ValueError("an indirect interface requires memory_map_ref or transparent_bridges")
     add_text(elem, "bitsInLau", indirect_interface.bits_in_lau)
     add_text(elem, "endianness", indirect_interface.endianness)
     add_parameters(elem, indirect_interface.parameters)

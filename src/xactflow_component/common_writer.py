@@ -199,14 +199,20 @@ def add_field_reference_group(parent: etree._Element, reference: FieldReference,
         sub(parent, "memoryMapRef", memoryMapRef=reference.memory_map_ref)
         if reference.memory_remap_ref is not None:
             sub(parent, "memoryRemapRef", memoryRemapRef=reference.memory_remap_ref)
+    elif with_range:
+        raise ValueError("a field slice reference requires address_space_ref or memory_map_ref")
     for bank_ref in reference.bank_refs:
         sub(parent, "bankRef", bankRef=bank_ref)
     if reference.address_block_ref is not None:
         sub(parent, "addressBlockRef", addressBlockRef=reference.address_block_ref)
+    elif with_range:
+        raise ValueError("a field slice reference requires address_block_ref")
     for register_file_ref in reference.register_file_refs:
         sub(parent, "registerFileRef", registerFileRef=register_file_ref)
     if reference.register_ref is not None:
         sub(parent, "registerRef", registerRef=reference.register_ref)
+    elif with_range:
+        raise ValueError("a field slice reference requires register_ref")
     if reference.alternate_register_ref is not None:
         sub(parent, "alternateRegisterRef", alternateRegisterRef=reference.alternate_register_ref)
     sub(parent, "fieldRef", fieldRef=reference.field_ref)
@@ -399,11 +405,13 @@ def add_qualifier(parent: etree._Element, qualifier: Optional[Qualifier]) -> Non
 
 def _add_cell_specification(parent: etree._Element, cell: CellSpecification) -> None:
     elem = sub(parent, "cellSpecification", cellStrength=cell.cell_strength)
-    # cellSpecification is a choice: cellFunction or cellClass, never both.
+    # cellSpecification is a required choice: exactly one of cellFunction or cellClass.
     if cell.cell_function is not None:
         sub(elem, "cellFunction", cell.cell_function)
     elif cell.cell_class is not None:
         sub(elem, "cellClass", cell.cell_class)
+    else:
+        raise ValueError("a cell specification requires cell_function or cell_class")
 
 
 def add_drive_constraint(parent: etree._Element, constraint: Optional[DriveConstraint]) -> None:

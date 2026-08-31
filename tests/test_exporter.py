@@ -24,7 +24,7 @@ def test_exporter_creates_a_missing_output_directory(tmp_path):
 
 
 def test_exporter_rejects_a_non_component_subject(tmp_path):
-    with pytest.raises(TypeError, match="ipxact.Component"):
+    with pytest.raises(TypeError, match=r"ipxact\.Component"):
         ComponentExporter().export(object(), tmp_path)
 
 

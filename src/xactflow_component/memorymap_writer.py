@@ -100,14 +100,20 @@ def _add_write_value_constraint(parent: etree._Element, constraint: Optional[Wri
     if constraint is None:
         return
     elem = sub(parent, "writeValueConstraint")
-    # A required choice: writeAsRead, useEnumeratedValues, or the minimum/maximum pair.
+    # A required choice: writeAsRead, useEnumeratedValues, or the minimum/maximum pair (both
+    # required together, not independently optional, once that arm is the one in use).
     if constraint.write_as_read is not None:
         sub(elem, "writeAsRead", bool_str(constraint.write_as_read))
     elif constraint.use_enumerated_values is not None:
         sub(elem, "useEnumeratedValues", bool_str(constraint.use_enumerated_values))
+    elif constraint.minimum is not None and constraint.maximum is not None:
+        sub(elem, "minimum", constraint.minimum)
+        sub(elem, "maximum", constraint.maximum)
     else:
-        add_text(elem, "minimum", constraint.minimum)
-        add_text(elem, "maximum", constraint.maximum)
+        raise ValueError(
+            "a write value constraint requires write_as_read, use_enumerated_values, "
+            "or both minimum and maximum"
+        )
 
 
 def _add_access_restriction(parent: etree._Element, restriction: AccessRestriction) -> None:

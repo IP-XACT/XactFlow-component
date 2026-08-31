@@ -54,15 +54,22 @@ def _add_single_shot_driver(parent: etree._Element, single_shot: SingleShotDrive
 
 def _add_driver(parent: etree._Element, driver: Driver) -> None:
     elem = sub(parent, "driver")
+    has_value = driver.default_value is not None or driver.clock_driver is not None or driver.single_shot_driver is not None
+    # driverType's content is optional as a whole (an empty <driver/> is legal), but once any
+    # of it is used, the trailing value choice becomes required.
+    if not has_value and driver.range_left is None and driver.range_right is None and not driver.view_refs:
+        return
     add_range(elem, driver.range_left, driver.range_right)
     add_texts(elem, "viewRef", driver.view_refs)
-    # defaultValue, clockDriver and singleShotDriver are the three arms of a choice.
+    # defaultValue, clockDriver and singleShotDriver are the three arms of that choice.
     if driver.default_value is not None:
         sub(elem, "defaultValue", driver.default_value)
     elif driver.clock_driver is not None:
         _add_clock_driver(elem, driver.clock_driver)
     elif driver.single_shot_driver is not None:
         _add_single_shot_driver(elem, driver.single_shot_driver)
+    else:
+        raise ValueError("a driver with range or view_refs requires default_value, clock_driver, or single_shot_driver")
 
 
 def _add_constraint_set(parent: etree._Element, constraint_set: ConstraintSet) -> None:
@@ -175,6 +182,8 @@ def write_port(port: Port) -> etree._Element:
         add_transactional_port(elem, port.transactional)
     elif port.structured is not None:
         add_structured_port(elem, port.structured)
+    else:
+        raise ValueError("a port requires wire, transactional, or structured")
     if port.field_maps:
         field_maps = sub(elem, "fieldMaps")
         for field_map in port.field_maps:
