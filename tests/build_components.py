@@ -392,10 +392,12 @@ def build_wide_component() -> ipxact.Component:
                 mode=ipxact.InterfaceMode.TARGET,
                 target=ipxact.TargetInterface(
                     memory_map_ref="main_mm",
+                    mode_refs=[_normal_mode_ref()],
                     file_set_ref_groups=[
                         ipxact.FileSetRefGroup(group="rtl", file_set_refs=["rtl_files"])
                     ],
                 ),
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="bridge_target",
@@ -404,17 +406,20 @@ def build_wide_component() -> ipxact.Component:
                 target=ipxact.TargetInterface(
                     transparent_bridges=[ipxact.TransparentBridge(initiator_ref="cpu_initiator")]
                 ),
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="sys_if",
                 bus_type=ipxact.VLNVRef("amba.com", "AMBA4", "APB4", "r0p0_0"),
                 mode=ipxact.InterfaceMode.SYSTEM,
                 system=ipxact.SystemInterface(group="sysgroup"),
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="mirror_initiator",
                 bus_type=ipxact.VLNVRef("amba.com", "AMBA4", "APB4", "r0p0_0"),
                 mode=ipxact.InterfaceMode.MIRRORED_INITIATOR,
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="mirror_target",
@@ -427,12 +432,14 @@ def build_wide_component() -> ipxact.Component:
                     ],
                     range="0x100",
                 ),
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="mirror_system",
                 bus_type=ipxact.VLNVRef("amba.com", "AMBA4", "APB4", "r0p0_0"),
                 mode=ipxact.InterfaceMode.MIRRORED_SYSTEM,
                 mirrored_system=ipxact.SystemInterface(group="sysgroup"),
+                bit_steering="0",
             ),
             ipxact.BusInterface(
                 name="monitor_if",
@@ -442,6 +449,7 @@ def build_wide_component() -> ipxact.Component:
                     interface_mode=ipxact.InterfaceMode.SYSTEM,
                     group="sysgroup",
                 ),
+                bit_steering="0",
             ),
         ],
         indirect_interfaces=[

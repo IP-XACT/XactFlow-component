@@ -80,7 +80,8 @@ def _add_target(parent: etree._Element, target: TargetInterface) -> None:
     elem = sub(parent, "target")
     # memoryMapRef and transparentBridge are the two arms of an optional choice.
     if target.memory_map_ref is not None:
-        sub(elem, "memoryMapRef", memoryMapRef=target.memory_map_ref)
+        ref_elem = sub(elem, "memoryMapRef", memoryMapRef=target.memory_map_ref)
+        add_mode_refs(ref_elem, target.mode_refs, with_priority=False)
     else:
         _add_transparent_bridges(elem, target.transparent_bridges)
     for group in target.file_set_ref_groups:
