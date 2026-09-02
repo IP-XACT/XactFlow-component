@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__version__ = "0.1.0"
+
 from pathlib import Path
 
 import ipxact
@@ -9,6 +11,7 @@ from .component_writer import component_to_bytes, write_component, write_compone
 
 __all__ = [
     "ComponentExporter",
+    "__version__",
     "component_to_bytes",
     "write_component",
     "write_component_file",
