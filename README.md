@@ -14,8 +14,8 @@ it writes the XML back out.
 pip install xactflow-component
 ```
 
-`ipxact-compiler` and `xactflow` are not published to PyPI yet. For local development,
-`requirements-dev.txt` assumes both are checked out as sibling directories:
+For local development, `requirements-dev.txt` overrides `ipxact-compiler` and `xactflow` to
+local installations. It can be modified to adapt the paths or to keep either version on PyPI.
 
 ```bash
 pip install -r requirements-dev.txt -e .
