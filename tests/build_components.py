@@ -301,6 +301,7 @@ def _model() -> ipxact.Model:
                         mode_refs=[_normal_mode_ref()],
                     )
                 ],
+                arrays=[ipxact.ArrayBound(left="3", right="0", array_id="A0")],
                 parameters=[ipxact.Parameter(name="PORT_P", value="1", parameter_id="PORT_P")],
                 vendor_extensions=[VENDOR_EXTENSION],
             ),
@@ -367,7 +368,13 @@ def build_wide_component() -> ipxact.Component:
                         port_maps=[
                             ipxact.PortMap(logical_port="PCLK", physical_port="clk"),
                             ipxact.PortMap(logical_port="PRESETn", logical_tie_off="1", invert=True),
-                            ipxact.PortMap(logical_port="PWDATA", physical_port="data", is_informative=True),
+                            ipxact.PortMap(
+                                logical_port="PWDATA",
+                                physical_port="data",
+                                part_select=ipxact.PartSelect(range_left="7", range_right="0"),
+                                sub_port_refs=[ipxact.SubPortReference(sub_port_ref="lower")],
+                                is_informative=True,
+                            ),
                         ],
                         view_refs=["rtl"],
                     )
@@ -750,10 +757,9 @@ def build_wide_component() -> ipxact.Component:
 def build_banked_component() -> ipxact.Component:
     """A Component built around banks and a structured port.
 
-    Both constructs round-trip through the writer and the parser, but neither can be written
-    as schema-valid XML from ipxact-compiler's object model: ipxact.Bank carries no
-    baseAddress (which addressBankType requires) and ipxact.StructuredPort carries no
-    structPortTypeDefs (which portStructuredType requires). See the README notes.
+    The banks round-trip through the writer and the parser but can't be written as
+    schema-valid XML: ipxact.Bank carries no baseAddress, which addressBankType requires. See
+    the README notes. The structured port, unlike the banks, is fully schema-valid on its own.
     """
     return ipxact.Component(
         vlnv=ipxact.VLNV("example.org", "ip", "banked", "1.0"),
@@ -809,6 +815,7 @@ def build_banked_component() -> ipxact.Component:
                             ipxact.SubPort(
                                 name="valid",
                                 wire=ipxact.WirePort(direction=ipxact.Direction.OUT),
+                                arrays=[ipxact.ArrayBound(left="7", right="0")],
                                 display_name="Valid",
                                 description="handshake valid",
                                 is_io=True,
@@ -823,10 +830,28 @@ def build_banked_component() -> ipxact.Component:
                                             wire=ipxact.WirePort(direction=ipxact.Direction.IN),
                                         )
                                     ],
+                                    struct_port_type_defs=[
+                                        ipxact.StructPortTypeDef(
+                                            type_name="ready_if",
+                                            role="consumer",
+                                            view_refs=["rtl"],
+                                        )
+                                    ],
                                     packed=False,
                                     phantom=True,
                                 ),
                             ),
+                        ],
+                        struct_port_type_defs=[
+                            ipxact.StructPortTypeDef(
+                                type_name="bus_req_t",
+                                constrained=["WIDTH", "DEPTH"],
+                                type_definitions=["bus_pkg.sv"],
+                                type_parameters=[
+                                    ipxact.ModuleParameter(name="WIDTH", value="32", data_type="int")
+                                ],
+                                view_refs=["rtl"],
+                            )
                         ],
                         packed=True,
                         direction=ipxact.Direction.OUT,

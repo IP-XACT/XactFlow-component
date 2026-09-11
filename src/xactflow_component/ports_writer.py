@@ -11,6 +11,7 @@ from ipxact.schema.ports import (
     FieldMap,
     Port,
     SingleShotDriver,
+    StructPortTypeDef,
     StructuredPort,
     SubPort,
     TransactionalPort,
@@ -18,6 +19,7 @@ from ipxact.schema.ports import (
 )
 
 from .common_writer import (
+    add_array_bounds,
     add_clock_driver_body,
     add_drive_constraint,
     add_field_reference_group,
@@ -38,6 +40,7 @@ from .common_writer import (
     bool_str,
     element,
     sub,
+    write_module_parameter,
     write_vendor_extensions,
 )
 
@@ -125,13 +128,22 @@ def add_transactional_port(parent: etree._Element, transactional: TransactionalP
         add_text(connection, "minConnections", transactional.min_connections)
 
 
-def add_structured_port(parent: etree._Element, structured: StructuredPort) -> None:
-    """Write ipxact:structured.
+def write_struct_port_type_def(type_def: StructPortTypeDef) -> etree._Element:
+    elem = element("structPortTypeDef")
+    sub(
+        elem,
+        "typeName",
+        type_def.type_name,
+        constrained=" ".join(type_def.constrained) if type_def.constrained else None,
+    )
+    add_texts(elem, "typeDefinition", type_def.type_definitions)
+    add_items(elem, "typeParameters", type_def.type_parameters, lambda p: write_module_parameter(p, tag="typeParameter"))
+    add_text(elem, "role", type_def.role)
+    add_texts(elem, "viewRef", type_def.view_refs)
+    return elem
 
-    portStructuredType also requires a structPortTypeDefs child, which ipxact-compiler
-    deliberately does not model (language-specific type bindings are out of its scope), so
-    structured ports round-trip faithfully but do not satisfy the XSD on their own.
-    """
+
+def add_structured_port(parent: etree._Element, structured: StructuredPort) -> None:
     elem = sub(parent, "structured", packed=None if structured.packed else bool_str(False))
     if structured.struct_type == "interface":
         sub(
@@ -150,6 +162,9 @@ def add_structured_port(parent: etree._Element, structured: StructuredPort) -> N
         sub_ports = sub(elem, "subPorts")
         for sub_port in structured.sub_ports:
             _add_sub_port(sub_ports, sub_port)
+    # structPortTypeDefs is required by portStructuredType; an empty struct_port_type_defs
+    # here produces a document that fails validation rather than one this writer patches up.
+    add_items(elem, "structPortTypeDefs", structured.struct_port_type_defs, write_struct_port_type_def)
 
 
 def _add_sub_port(parent: etree._Element, sub_port: SubPort) -> None:
@@ -163,6 +178,9 @@ def _add_sub_port(parent: etree._Element, sub_port: SubPort) -> None:
         add_wire_port(elem, sub_port.wire)
     elif sub_port.structured is not None:
         add_structured_port(elem, sub_port.structured)
+    else:
+        raise ValueError("a sub port requires wire or structured")
+    add_array_bounds(elem, sub_port.arrays)
 
 
 def _add_field_map(parent: etree._Element, field_map: FieldMap) -> None:
@@ -189,6 +207,7 @@ def write_port(port: Port) -> etree._Element:
         field_maps = sub(elem, "fieldMaps")
         for field_map in port.field_maps:
             _add_field_map(field_maps, field_map)
+    add_array_bounds(elem, port.arrays)
     add_parameters(elem, port.parameters)
     write_vendor_extensions(elem, port.vendor_extensions)
     return elem

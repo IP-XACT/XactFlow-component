@@ -145,6 +145,27 @@ def test_indirect_interface_without_memory_map_ref_or_bridges_is_rejected():
         component_to_bytes(component)
 
 
+def test_sub_port_without_wire_or_structured_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-sub-port"),
+        model=ipxact.Model(
+            ports=[
+                ipxact.Port(
+                    name="bus",
+                    structured=ipxact.StructuredPort(
+                        struct_type="struct",
+                        sub_ports=[ipxact.SubPort(name="valid")],
+                        struct_port_type_defs=[ipxact.StructPortTypeDef(type_name="bus_req_t")],
+                        direction=ipxact.Direction.OUT,
+                    ),
+                )
+            ]
+        ),
+    )
+    with pytest.raises(ValueError, match="wire or structured"):
+        component_to_bytes(component)
+
+
 def test_port_without_wire_transactional_or_structured_is_rejected():
     component = ipxact.Component(
         vlnv=_vlnv("bad-port"),

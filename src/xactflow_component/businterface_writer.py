@@ -26,6 +26,7 @@ from .common_writer import (
     add_mode_refs,
     add_name_group,
     add_parameters,
+    add_part_select,
     add_text,
     add_texts,
     bool_str,
@@ -49,6 +50,11 @@ def _add_port_map(parent: etree._Element, port_map: PortMap) -> None:
     if port_map.physical_port is not None:
         physical_port = sub(elem, "physicalPort")
         sub(physical_port, "name", port_map.physical_port)
+        add_part_select(physical_port, port_map.part_select)
+        for sub_port_ref in port_map.sub_port_refs:
+            sub_port_elem = sub(physical_port, "subPort")
+            sub(sub_port_elem, "name", sub_port_ref.sub_port_ref)
+            add_part_select(sub_port_elem, sub_port_ref.part_select)
     elif port_map.logical_tie_off is not None:
         sub(elem, "logicalTieOff", port_map.logical_tie_off)
     else:

@@ -268,7 +268,7 @@ def write_parameter(parameter: Parameter) -> etree._Element:
     return elem
 
 
-def write_module_parameter(parameter: ModuleParameter) -> etree._Element:
+def write_module_parameter(parameter: ModuleParameter, tag: str = "moduleParameter") -> etree._Element:
     attrs = _parameter_attributes(parameter)
     attrs.update(
         dataType=parameter.data_type,
@@ -276,7 +276,7 @@ def write_module_parameter(parameter: ModuleParameter) -> etree._Element:
         dataTypeDefinition=parameter.data_type_definition,
         constrained=" ".join(parameter.constrained) if parameter.constrained else None,
     )
-    elem = element("moduleParameter", None, **attrs)
+    elem = element(tag, None, **attrs)
     _add_parameter_body(elem, parameter, with_ids=True)
     return elem
 

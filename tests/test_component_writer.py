@@ -49,6 +49,36 @@ def test_banked_component_round_trips(tmp_path):
     assert _write_and_reparse(component, tmp_path) == component
 
 
+def test_structured_port_with_type_defs_is_schema_valid(component_schema, tmp_path):
+    """A populated structPortTypeDefs makes a structured port satisfy the XSD on its own.
+
+    build_banked_component's structured port isn't usable for this: it also has a Bank with
+    no baseAddress, which fails validation for an unrelated reason. This isolates the
+    structured port alone to prove structPortTypeDefs specifically is no longer a gap.
+    """
+    component = ipxact.Component(
+        vlnv=ipxact.VLNV("example.org", "ip", "structured_port", "1.0"),
+        model=ipxact.Model(
+            ports=[
+                ipxact.Port(
+                    name="bus",
+                    structured=ipxact.StructuredPort(
+                        struct_type="struct",
+                        sub_ports=[
+                            ipxact.SubPort(name="valid", wire=ipxact.WirePort(direction=ipxact.Direction.OUT))
+                        ],
+                        struct_port_type_defs=[ipxact.StructPortTypeDef(type_name="bus_req_t")],
+                        direction=ipxact.Direction.OUT,
+                    ),
+                )
+            ]
+        ),
+    )
+    path = write_component_file(component, tmp_path / "structured_port.xml")
+    component_schema.assertValid(etree.parse(str(path)))
+    assert ipxact.parse_file(path) == component
+
+
 def test_expressions_are_written_verbatim(tmp_path):
     component = ipxact.Component(
         vlnv=ipxact.VLNV("example.org", "ip", "expressions", "1.0"),

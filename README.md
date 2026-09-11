@@ -94,8 +94,6 @@ through the parser unchanged, but the XML it produces will not satisfy the XSD:
 - **Banks have no `baseAddress`.** `ipxact.Bank` does not model one, while the schema's
   `addressBankType` (a bank directly inside a `memoryMap`, `memoryRemap` or `localMemoryMap`)
   requires it. Banks nested inside another bank are unaffected.
-- **Structured ports have no `structPortTypeDefs`.** `ipxact.StructuredPort` leaves out the
-  language-specific type bindings that `portStructuredType` requires.
 - **`externalTypeDefinitions` has an optional name.** The schema's `nameGroup` requires one.
 - **`File.dependencies` is write-only.** `ipxact-compiler`'s `parse_file` does not read `dependency`
   children of a `file` back, so setting them means the value is written but does not survive a
