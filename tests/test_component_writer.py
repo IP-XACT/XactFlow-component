@@ -44,6 +44,11 @@ def test_wide_component_output_passes_scr_checks(tmp_path):
     assert xactflow.SCR.run_single_doc_checks(reparsed) == []
 
 
+def test_banked_component_is_schema_valid(component_schema, tmp_path):
+    path = write_component_file(build_banked_component(), tmp_path / "banked.xml")
+    component_schema.assertValid(etree.parse(str(path)))
+
+
 def test_banked_component_round_trips(tmp_path):
     component = build_banked_component()
     assert _write_and_reparse(component, tmp_path) == component

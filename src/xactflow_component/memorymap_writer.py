@@ -268,9 +268,16 @@ def _add_subspace_map(parent: etree._Element, subspace_map: SubspaceMap, banked:
     write_vendor_extensions(elem, subspace_map.vendor_extensions)
 
 
-def _add_bank(parent: etree._Element, bank: Bank, allow_subspace: bool) -> None:
+def _add_bank(parent: etree._Element, bank: Bank, banked: bool, allow_subspace: bool) -> None:
+    """Write a bank.
+
+    A bank nested inside another bank uses the schema's separate bankedBankType, which
+    carries no baseAddress, matching AddressBlock/SubspaceMap's own banked distinction.
+    """
     elem = sub(parent, "bank", bankAlignment=bank.bank_alignment.value)
     add_name_group(elem, bank.name, bank.display_name, description=bank.description)
+    if not banked:
+        add_text(elem, "baseAddress", bank.base_address)
     _add_memory_map_items(elem, bank.items, banked=True, allow_subspace=allow_subspace)
     _add_memory_block_data(elem, bank.usage, bank.volatile, bank.access_policies, bank.parameters)
     write_vendor_extensions(elem, bank.vendor_extensions)
@@ -284,7 +291,7 @@ def _add_memory_map_items(
 ) -> None:
     for item in items:
         if isinstance(item, Bank):
-            _add_bank(parent, item, allow_subspace=allow_subspace)
+            _add_bank(parent, item, banked=banked, allow_subspace=allow_subspace)
         elif isinstance(item, AddressBlock):
             _add_address_block(parent, item, banked=banked)
         elif isinstance(item, SubspaceMap):

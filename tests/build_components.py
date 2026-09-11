@@ -755,14 +755,18 @@ def build_wide_component() -> ipxact.Component:
 
 
 def build_banked_component() -> ipxact.Component:
-    """A Component built around banks and a structured port.
-
-    The banks round-trip through the writer and the parser but can't be written as
-    schema-valid XML: ipxact.Bank carries no baseAddress, which addressBankType requires. See
-    the README notes. The structured port, unlike the banks, is fully schema-valid on its own.
-    """
+    """A Component built around banks and a structured port, fully schema-valid."""
     return ipxact.Component(
         vlnv=ipxact.VLNV("example.org", "ip", "banked", "1.0"),
+        bus_interfaces=[
+            ipxact.BusInterface(
+                name="init_if",
+                bus_type=ipxact.VLNVRef("amba.com", "AMBA4", "APB4", "r0p0_0"),
+                mode=ipxact.InterfaceMode.INITIATOR,
+                initiator=ipxact.InitiatorInterface(),
+                bit_steering="0",
+            )
+        ],
         memory_maps=[
             ipxact.MemoryMap(
                 name="banked_mm",
@@ -770,6 +774,7 @@ def build_banked_component() -> ipxact.Component:
                     ipxact.Bank(
                         name="outer",
                         bank_alignment=ipxact.BankAlignment.SERIAL,
+                        base_address="0x0",
                         items=[
                             ipxact.AddressBlock(
                                 name="banked_regs",
@@ -805,6 +810,7 @@ def build_banked_component() -> ipxact.Component:
             )
         ],
         model=ipxact.Model(
+            views=[ipxact.View(name="rtl")],
             ports=[
                 ipxact.Port(
                     name="bus",
