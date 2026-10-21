@@ -72,9 +72,6 @@ planned later addition, not an oversight.
   emitted unchanged, never evaluated or reformatted.
 - **Vendor extensions stay identical.** Their content is not IP-XACT's to define, so each
   fragment is re-inserted as parsed.
-- **No `xsi:schemaLocation`.** The root element declares only the IP-XACT namespace, matching the
-  fixtures in `ipxact-compiler`. A document is identified by its namespace and root element, and a
-  hard-coded schema location would point at a path that does not exist on the reader's machine.
 - **Defaults are omitted.** Attributes and elements whose value equals the schema default
   (`resolve="immediate"`, `type="string"`, `misalignmentAllowed="true"`, `connectionRequired`
   false, and so on) are left out, which keeps the output close to hand-written IP-XACT and still

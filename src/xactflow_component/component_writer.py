@@ -10,6 +10,8 @@ from ipxact.schema.component import Component
 from .businterface_writer import add_bus_interfaces, add_channels, add_indirect_interfaces
 from .common_writer import (
     NAMESPACE,
+    SCHEMA_LOCATION,
+    XSI_NAMESPACE,
     add_assertions,
     add_choices,
     add_file_sets,
@@ -39,6 +41,7 @@ def write_component(component: Component) -> etree._Element:
     Child order follows component.xsd's componentType sequence.
     """
     root = element("component")
+    root.set(f"{{{XSI_NAMESPACE}}}schemaLocation", SCHEMA_LOCATION)
     add_vlnv(root, component.vlnv)
     add_text(root, "displayName", component.display_name)
     add_text(root, "shortDescription", component.short_description)
