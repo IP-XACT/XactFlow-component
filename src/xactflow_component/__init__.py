@@ -28,7 +28,7 @@ class ComponentExporter(Exporter):
 
     def export(self, subject: object, output_dir: Path, **options: object) -> None:
         if not isinstance(subject, ipxact.Component):
-            # ElaboratedDesign support (flattening a resolved multi-instance design into one
+            # LinkedDesign support (flattening a resolved multi-instance design into one
             # boundary Component) is an agreed-on later addition.
             raise TypeError(
                 f"xactflow-component only supports ipxact.Component, got {type(subject).__name__}"

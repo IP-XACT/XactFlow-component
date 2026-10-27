@@ -52,11 +52,11 @@ path = write_component_file(component, "out.xml") # writes and returns the path
 
 Once installed, the exporter registers itself under the `xactflow.exporters` entry point group as
 `component`, so `xactflow component ...` becomes available as a XactFlow CLI subcommand. Note that
-XactFlow's CLI always elaborates a design before calling an exporter, so for now the way to use
+XactFlow's CLI always links a design before calling an exporter, so for now the way to use
 this package is to call `ComponentExporter().export(...)` directly on a `Component`.
 
 `export()` raises `TypeError` for anything that is not an `ipxact.Component`. Accepting an
-`ElaboratedDesign` (flattening a resolved multi-instance design into one boundary component) is a
+`LinkedDesign` (flattening a resolved multi-instance design into one boundary component) is a
 planned later addition, not an oversight.
 
 ## Design notes

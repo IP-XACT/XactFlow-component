@@ -14,7 +14,7 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "xactflow",
+    "xactflow>=0.2.0",
     "ipxact-compiler>=0.1.2",
     "lxml",
 ]
