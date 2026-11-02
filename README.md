@@ -51,9 +51,15 @@ path = write_component_file(component, "out.xml") # writes and returns the path
 ```
 
 Once installed, the exporter registers itself under the `xactflow.exporters` entry point group as
-`component`, so `xactflow component ...` becomes available as a XactFlow CLI subcommand. Note that
-XactFlow's CLI always links a design before calling an exporter, so for now the way to use
-this package is to call `ComponentExporter().export(...)` directly on a `Component`.
+`component`. From the XactFlow CLI, use it after an importer with `--then component`:
+
+```bash
+xactflow sv uart.sv --option metadata=uart_ipxact.json --then component --output out/
+# writes out/uart.xml
+```
+
+The `xactflow component <design>` subcommand links a design first and passes the result to the
+exporter, so it fails until `LinkedDesign` is supported (see below).
 
 `export()` raises `TypeError` for anything that is not an `ipxact.Component`. Accepting an
 `LinkedDesign` (flattening a resolved multi-instance design into one boundary component) is a
