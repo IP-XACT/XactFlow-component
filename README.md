@@ -114,13 +114,11 @@ pip install -r requirements-dev.txt -e .
 pytest
 ```
 
-The tests round-trip both `ipxact-compiler`'s `apb_uart.xml` fixture and hand-built components
-through the writer and back through the parser, validate the written XML against the
-`component.xsd` shipped with `ipxact-compiler`, and re-run `xactflow.SCR.run_single_doc_checks` on
-the result. Between them, the hand-built components set every field of every dataclass a
-`Component` can contain, and a test fails when one is not set, so a field added to
-`ipxact-compiler` cannot be missed by the writer unnoticed. The `apb_uart.xml` tests expect
-`ipxact-compiler` as a sibling checkout and are skipped without it.
+The tests round-trip hand-built components through the writer and back through the parser,
+validate the written XML against the `component.xsd` shipped with `ipxact-compiler`, and re-run
+`xactflow.SCR.run_single_doc_checks` on the result. Between them, the hand-built components set
+every field of every dataclass a `Component` can contain, and a test fails when one is not set, so
+a field added to `ipxact-compiler` cannot be missed by the writer unnoticed.
 
 ## License
 

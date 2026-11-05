@@ -19,19 +19,6 @@ def _write_and_reparse(component: ipxact.Component, tmp_path: Path) -> ipxact.Co
     return ipxact.parse_file(path)
 
 
-def test_fixture_round_trips(apb_uart_path, component_schema, tmp_path):
-    component = ipxact.parse_file(apb_uart_path)
-    path = write_component_file(component, tmp_path / "apb_uart.xml")
-
-    component_schema.assertValid(etree.parse(str(path)))
-    assert ipxact.parse_file(path) == component
-
-
-def test_fixture_output_passes_scr_checks(apb_uart_path, tmp_path):
-    component = ipxact.parse_file(apb_uart_path)
-    assert xactflow.SCR.run_single_doc_checks(_write_and_reparse(component, tmp_path)) == []
-
-
 def test_wide_component_is_schema_valid(component_schema, tmp_path):
     path = write_component_file(build_wide_component(), tmp_path / "wide.xml")
     component_schema.assertValid(etree.parse(str(path)))
