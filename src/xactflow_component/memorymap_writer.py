@@ -39,6 +39,7 @@ from .common_writer import (
     add_parameters,
     add_text,
     bool_str,
+    check_choice,
     element,
     sub,
     write_vendor_extensions,
@@ -98,6 +99,12 @@ def _add_write_value_constraint(parent: etree._Element, constraint: Optional[Wri
     elem = sub(parent, "writeValueConstraint")
     # A required choice: writeAsRead, useEnumeratedValues, or the minimum/maximum pair (both
     # required together, not independently optional, once that arm is the one in use).
+    check_choice(
+        "a write value constraint",
+        {"write_as_read": constraint.write_as_read},
+        {"use_enumerated_values": constraint.use_enumerated_values},
+        {"minimum": constraint.minimum, "maximum": constraint.maximum},
+    )
     if constraint.write_as_read is not None:
         sub(elem, "writeAsRead", bool_str(constraint.write_as_read))
     elif constraint.use_enumerated_values is not None:
@@ -130,6 +137,19 @@ def _write_field_access_policy(policy: FieldAccessPolicy) -> etree._Element:
     elem = element("fieldAccessPolicy", xml_id=policy.xml_id)
     add_mode_refs(elem, policy.mode_refs)
     # The definition reference replaces the inline access/.../readResponse content.
+    check_choice(
+        "a field access policy",
+        {"field_access_policy_definition_ref": policy.field_access_policy_definition_ref},
+        {
+            "access": policy.access,
+            "modified_write_value": policy.modified_write_value,
+            "modified_write_value_modify": policy.modified_write_value_modify,
+            "write_value_constraint": policy.write_value_constraint,
+            "read_action": policy.read_action,
+            "read_action_modify": policy.read_action_modify,
+            "read_response": policy.read_response,
+        },
+    )
     if policy.field_access_policy_definition_ref is not None:
         add_definition_ref(elem, "fieldAccessPolicyDefinitionRef", policy.field_access_policy_definition_ref)
     else:
@@ -162,11 +182,36 @@ def _add_field(parent: etree._Element, field: Field) -> None:
     add_memory_array(elem, field.array, stride_tag="bitStride")
     add_expression(elem, "bitOffset", field.bit_offset)
     # The field definition reference replaces everything up to the parameters.
+    check_choice(
+        f"field {field.name!r}",
+        {"field_definition_ref": field.field_definition_ref},
+        {
+            "type_identifier": field.type_identifier,
+            "bit_width": field.bit_width,
+            "volatile": field.volatile,
+            "resets": field.resets,
+            "alias_of": field.alias_of,
+            "field_access_policies": field.field_access_policies,
+            "field_access_policies_xml_id": field.field_access_policies_xml_id,
+            "enumeration_definition_ref": field.enumeration_definition_ref,
+            "enumerated_values": field.enumerated_values,
+        },
+    )
     if field.field_definition_ref is not None:
         add_definition_ref(elem, "fieldDefinitionRef", field.field_definition_ref)
     else:
         add_text(elem, "typeIdentifier", field.type_identifier)
         # bitWidth (with volatile and resets) and aliasOf are the two arms of a required choice.
+        check_choice(
+            f"field {field.name!r}",
+            {"bit_width": field.bit_width, "volatile": field.volatile, "resets": field.resets},
+            {"alias_of": field.alias_of},
+        )
+        check_choice(
+            f"field {field.name!r}",
+            {"enumeration_definition_ref": field.enumeration_definition_ref},
+            {"enumerated_values": field.enumerated_values},
+        )
         if field.bit_width is not None:
             add_expression(elem, "bitWidth", field.bit_width)
             add_bool(elem, "volatile", field.volatile)
@@ -207,6 +252,17 @@ def _add_register(parent: etree._Element, register: Register) -> None:
     add_access_handles(elem, register.access_handles, with_force=False)
     add_memory_array(elem, register.array)
     add_expression(elem, "addressOffset", register.address_offset)
+    check_choice(
+        f"register {register.name!r}",
+        {"register_definition_ref": register.register_definition_ref},
+        {
+            "type_identifier": register.type_identifier,
+            "size": register.size,
+            "volatile": register.volatile,
+            "access_policies": register.access_policies,
+            "fields": register.fields,
+        },
+    )
     if register.register_definition_ref is not None:
         add_definition_ref(elem, "registerDefinitionRef", register.register_definition_ref)
     else:
@@ -230,6 +286,16 @@ def _add_register_file(parent: etree._Element, register_file: RegisterFile) -> N
     add_access_handles(elem, register_file.access_handles, with_force=False)
     add_memory_array(elem, register_file.array)
     add_expression(elem, "addressOffset", register_file.address_offset)
+    check_choice(
+        f"register file {register_file.name!r}",
+        {"register_file_definition_ref": register_file.register_file_definition_ref},
+        {
+            "type_identifier": register_file.type_identifier,
+            "range": register_file.range,
+            "access_policies": register_file.access_policies,
+            "registers": register_file.registers,
+        },
+    )
     if register_file.register_file_definition_ref is not None:
         add_definition_ref(elem, "registerFileDefinitionRef", register_file.register_file_definition_ref)
     else:
@@ -268,6 +334,20 @@ def _add_address_block(parent: etree._Element, block: AddressBlock, banked: bool
     if not banked:
         add_memory_array(elem, block.array)
         add_expression(elem, "baseAddress", block.base_address)
+        check_choice(
+            f"address block {block.name!r}",
+            {"address_block_definition_ref": block.address_block_definition_ref},
+            {
+                "type_identifier": block.type_identifier,
+                "range": block.range,
+                "width": block.width,
+                "usage": block.usage,
+                "volatile": block.volatile,
+                "access_policies": block.access_policies,
+                "parameters": block.parameters,
+                "registers": block.registers,
+            },
+        )
         if block.address_block_definition_ref is not None:
             add_definition_ref(elem, "addressBlockDefinitionRef", block.address_block_definition_ref)
             write_vendor_extensions(elem, block.vendor_extensions)
@@ -306,6 +386,17 @@ def _add_bank(parent: etree._Element, bank: Bank, banked: bool, allow_subspace: 
     add_access_handles(elem, bank.access_handles, with_force=False)
     if not banked:
         add_expression(elem, "baseAddress", bank.base_address)
+    check_choice(
+        f"bank {bank.name!r}",
+        {"bank_definition_ref": bank.bank_definition_ref},
+        {
+            "items": bank.items,
+            "usage": bank.usage,
+            "volatile": bank.volatile,
+            "access_policies": bank.access_policies,
+            "parameters": bank.parameters,
+        },
+    )
     if bank.bank_definition_ref is not None:
         add_definition_ref(elem, "bankDefinitionRef", bank.bank_definition_ref)
     else:
@@ -337,6 +428,11 @@ def _add_memory_remap(parent: etree._Element, memory_remap: MemoryRemap) -> None
     elem = sub(parent, "memoryRemap", xml_id=memory_remap.xml_id)
     add_name_group(elem, memory_remap)
     add_mode_refs(elem, memory_remap.mode_refs)
+    check_choice(
+        f"memory remap {memory_remap.name!r}",
+        {"remap_definition_ref": memory_remap.remap_definition_ref},
+        {"items": memory_remap.items},
+    )
     if memory_remap.remap_definition_ref is not None:
         add_definition_ref(elem, "remapDefinitionRef", memory_remap.remap_definition_ref)
     else:
@@ -347,6 +443,16 @@ def _add_memory_remap(parent: etree._Element, memory_remap: MemoryRemap) -> None
 def write_memory_map(memory_map: MemoryMap) -> etree._Element:
     elem = element("memoryMap", xml_id=memory_map.xml_id)
     add_name_group(elem, memory_map)
+    check_choice(
+        f"memory map {memory_map.name!r}",
+        {"memory_map_definition_ref": memory_map.memory_map_definition_ref},
+        {
+            "items": memory_map.items,
+            "memory_remaps": memory_map.memory_remaps,
+            "address_unit_bits": memory_map.address_unit_bits,
+            "shared": memory_map.shared,
+        },
+    )
     if memory_map.memory_map_definition_ref is not None:
         add_definition_ref(elem, "memoryMapDefinitionRef", memory_map.memory_map_definition_ref)
     else:

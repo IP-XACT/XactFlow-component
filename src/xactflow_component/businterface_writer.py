@@ -35,6 +35,7 @@ from .common_writer import (
     add_text,
     add_text_values,
     bool_str,
+    check_choice,
     element,
     set_other_attributes,
     sub,
@@ -55,6 +56,16 @@ def _write_port_map(port_map: PortMap) -> etree._Element:
     sub(logical_port, "name", port_map.logical_port)
     add_range(logical_port, port_map.logical_range)
     # physicalPort and logicalTieOff are the two arms of a required choice.
+    check_choice(
+        f"the port map of {port_map.logical_port!r}",
+        {
+            "physical_port": port_map.physical_port,
+            "physical_port_xml_id": port_map.physical_port_xml_id,
+            "part_select": port_map.part_select,
+            "sub_port_refs": port_map.sub_port_refs,
+        },
+        {"logical_tie_off": port_map.logical_tie_off},
+    )
     if port_map.physical_port is not None:
         physical_port = sub(elem, "physicalPort", xml_id=port_map.physical_port_xml_id)
         sub(physical_port, "name", port_map.physical_port)
@@ -96,6 +107,11 @@ def _add_initiator(parent: etree._Element, initiator: InitiatorInterface) -> Non
 def _add_target(parent: etree._Element, target: TargetInterface) -> None:
     elem = sub(parent, "target")
     # memoryMapRef and transparentBridge are the two arms of an optional choice.
+    check_choice(
+        "a target interface",
+        {"memory_map_ref": target.memory_map_ref, "mode_refs": target.mode_refs},
+        {"transparent_bridges": target.transparent_bridges},
+    )
     if target.memory_map_ref is not None:
         ref_elem = sub(elem, "memoryMapRef", memoryMapRef=target.memory_map_ref)
         add_mode_refs(ref_elem, target.mode_refs)
@@ -135,8 +151,23 @@ def _add_monitor(parent: etree._Element, monitor: MonitorInterface) -> None:
     add_text(elem, "group", monitor.group)
 
 
+_MODE_FIELDS = {
+    InterfaceMode.INITIATOR: "initiator",
+    InterfaceMode.TARGET: "target",
+    InterfaceMode.SYSTEM: "system",
+    InterfaceMode.MIRRORED_TARGET: "mirrored_target",
+    InterfaceMode.MIRRORED_INITIATOR: "mirrored_initiator",
+    InterfaceMode.MIRRORED_SYSTEM: "mirrored_system",
+    InterfaceMode.MONITOR: "monitor",
+}
+
+
 def _add_interface_mode(parent: etree._Element, bus_interface: BusInterface) -> None:
     mode = bus_interface.mode
+    # The interface modes are the arms of a choice: only the one selected by mode is written.
+    others = [name for other, name in _MODE_FIELDS.items() if other is not mode and getattr(bus_interface, name) is not None]
+    if others:
+        raise ValueError(f"bus interface {bus_interface.name!r} has mode {mode.name} but also sets {', '.join(others)}")
     if mode is InterfaceMode.INITIATOR:
         _add_initiator(parent, bus_interface.initiator or InitiatorInterface())
     elif mode is InterfaceMode.TARGET:
@@ -189,6 +220,11 @@ def write_indirect_interface(indirect_interface: IndirectInterface) -> etree._El
     add_field_reference_group(sub(elem, "indirectAddressRef"), indirect_interface.indirect_address_ref)
     add_field_reference_group(sub(elem, "indirectDataRef"), indirect_interface.indirect_data_ref)
     # memoryMapRef and transparentBridge are the two arms of a required choice.
+    check_choice(
+        f"indirect interface {indirect_interface.name!r}",
+        {"memory_map_ref": indirect_interface.memory_map_ref},
+        {"transparent_bridges": indirect_interface.transparent_bridges},
+    )
     if indirect_interface.memory_map_ref is not None:
         sub(elem, "memoryMapRef", indirect_interface.memory_map_ref)
     elif indirect_interface.transparent_bridges:

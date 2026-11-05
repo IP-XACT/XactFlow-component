@@ -154,6 +154,18 @@ def add_items(parent: etree._Element, container_tag: str, items: Sequence[T], wr
         container.append(writer(item))
 
 
+def check_choice(what: str, *arms: dict) -> None:
+    """Raise ValueError when more than one arm of an XSD choice is set.
+
+    Each arm maps the fields it is made of to their values; a field is set when it is not None
+    or an empty list. Only one arm can be written, so the others would be silently dropped.
+    """
+    set_arms = [[name for name, value in arm.items() if value is not None and value != []] for arm in arms]
+    set_arms = [", ".join(names) for names in set_arms if names]
+    if len(set_arms) > 1:
+        raise ValueError(f"{what} sets {' and '.join(set_arms)}, but the schema allows only one of them")
+
+
 def add_name_group(parent: etree._Element, item: object) -> None:
     """Write ipxact:nameGroup (name, displayName, shortDescription, description) from item.
 
@@ -298,6 +310,11 @@ def _add_indexed_ref(parent: etree._Element, tag: str, ref: Optional[IndexedRef]
 
 def add_field_reference_group(parent: etree._Element, reference: FieldReference, with_range: bool = False) -> None:
     """Write fieldReferenceGroup / fieldSliceReferenceGroup content directly into parent."""
+    check_choice(
+        "a field reference",
+        {"address_space_ref": reference.address_space_ref},
+        {"memory_map_ref": reference.memory_map_ref, "memory_remap_ref": reference.memory_remap_ref},
+    )
     if reference.address_space_ref is not None:
         sub(parent, "addressSpaceRef", addressSpaceRef=reference.address_space_ref)
     elif reference.memory_map_ref is not None:
@@ -611,6 +628,11 @@ def add_qualifier(parent: etree._Element, qualifier: Optional[Qualifier]) -> Non
 def _add_cell_specification(parent: etree._Element, cell: CellSpecification) -> None:
     elem = sub(parent, "cellSpecification", cellStrength=cell.cell_strength)
     # cellSpecification is a required choice: exactly one of cellFunction or cellClass.
+    check_choice(
+        "a cell specification",
+        {"cell_function": cell.cell_function, "cell_function_other": cell.cell_function_other},
+        {"cell_class": cell.cell_class},
+    )
     if cell.cell_function is not None:
         sub(elem, "cellFunction", cell.cell_function, other=cell.cell_function_other)
     elif cell.cell_class is not None:

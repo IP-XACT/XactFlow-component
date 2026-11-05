@@ -48,6 +48,7 @@ from .common_writer import (
     add_timing_constraints,
     add_vectors,
     bool_str,
+    check_choice,
     element,
     sub,
     write_module_parameter,
@@ -77,6 +78,12 @@ def _write_driver(driver: Driver) -> etree._Element:
     add_range(elem, driver.range)
     add_text_values(elem, "viewRef", driver.view_refs)
     # defaultValue, clockDriver and singleShotDriver are the three arms of that choice.
+    check_choice(
+        "a driver",
+        {"default_value": driver.default_value},
+        {"clock_driver": driver.clock_driver},
+        {"single_shot_driver": driver.single_shot_driver},
+    )
     if driver.default_value is not None:
         add_expression(elem, "defaultValue", driver.default_value)
     elif driver.clock_driver is not None:
@@ -262,6 +269,7 @@ def _add_sub_port(parent: etree._Element, sub_port: SubPort) -> None:
         isIO=bool_str(sub_port.is_io) if sub_port.is_io is not None else None,
     )
     add_name_group(elem, sub_port)
+    check_choice(f"sub port {sub_port.name!r}", {"wire": sub_port.wire}, {"structured": sub_port.structured})
     if sub_port.wire is not None:
         add_wire_port(elem, sub_port.wire)
     elif sub_port.structured is not None:
@@ -286,6 +294,12 @@ def write_port(port: Port) -> etree._Element:
     elem = element("port", xml_id=port.xml_id)
     add_name_group(elem, port)
     # wire, transactional and structured are the three arms of a required choice.
+    check_choice(
+        f"port {port.name!r}",
+        {"wire": port.wire},
+        {"transactional": port.transactional},
+        {"structured": port.structured},
+    )
     if port.wire is not None:
         add_wire_port(elem, port.wire)
     elif port.transactional is not None:

@@ -1,6 +1,7 @@
 """Writer functions raise a clear error for objects that leave a required XSD choice or
 sibling-field pair entirely unset, instead of silently emitting XML that only a schema
-validator would catch later. Each test below reproduces one such gap found during review.
+validator would catch later, and for objects that set more than one arm of a choice, instead of
+silently dropping all but one. Each test below reproduces one such gap found during review.
 """
 
 from __future__ import annotations
@@ -241,3 +242,156 @@ def test_field_without_bit_width_alias_or_definition_ref_is_rejected():
     component = _component_with_field(ipxact.Field(name="F", bit_offset=ipxact.Expression("0")))
     with pytest.raises(ValueError, match="bit_width, alias_of or field_definition_ref"):
         component_to_bytes(component)
+
+
+def _component_with_port(port: ipxact.Port) -> ipxact.Component:
+    return ipxact.Component(vlnv=_vlnv("bad-port"), model=ipxact.Model(ports=[port]))
+
+
+def _wire_with_driver(driver: ipxact.Driver) -> ipxact.WirePort:
+    return ipxact.WirePort(direction=ipxact.Direction.OUT, drivers=[driver])
+
+
+def test_port_with_two_types_is_rejected():
+    port = ipxact.Port(
+        name="p",
+        wire=ipxact.WirePort(direction=ipxact.Direction.IN),
+        transactional=ipxact.TransactionalPort(initiative=ipxact.Initiative.PROVIDES),
+    )
+    with pytest.raises(ValueError, match="sets wire and transactional"):
+        component_to_bytes(_component_with_port(port))
+
+
+def test_sub_port_with_wire_and_structured_is_rejected():
+    port = ipxact.Port(
+        name="bus",
+        structured=ipxact.StructuredPort(
+            struct_type="struct",
+            sub_ports=[
+                ipxact.SubPort(
+                    name="valid",
+                    wire=ipxact.WirePort(direction=ipxact.Direction.OUT),
+                    structured=ipxact.StructuredPort(struct_type="struct"),
+                )
+            ],
+            struct_port_type_defs=[ipxact.StructPortTypeDef(type_name="bus_req_t")],
+            direction=ipxact.Direction.OUT,
+        ),
+    )
+    with pytest.raises(ValueError, match="sets wire and structured"):
+        component_to_bytes(_component_with_port(port))
+
+
+def test_driver_with_two_values_is_rejected():
+    clock = ipxact.ClockDriver(
+        clock_period=ipxact.Expression("10"),
+        clock_pulse_offset=ipxact.Expression("0"),
+        clock_pulse_value=ipxact.Expression("1"),
+        clock_pulse_duration=ipxact.Expression("5"),
+    )
+    driver = ipxact.Driver(default_value=ipxact.Expression("0"), clock_driver=clock)
+    port = ipxact.Port(name="p", wire=_wire_with_driver(driver))
+    with pytest.raises(ValueError, match="sets default_value and clock_driver"):
+        component_to_bytes(_component_with_port(port))
+
+
+def test_cell_specification_with_function_and_class_is_rejected():
+    cell = ipxact.CellSpecification(cell_function="nand2", cell_class="combinational")
+    port = ipxact.Port(
+        name="p",
+        wire=ipxact.WirePort(
+            direction=ipxact.Direction.OUT,
+            constraint_sets=[ipxact.ConstraintSet(drive_constraint=ipxact.DriveConstraint(cell=cell))],
+        ),
+    )
+    with pytest.raises(ValueError, match="sets cell_function and cell_class"):
+        component_to_bytes(_component_with_port(port))
+
+
+def test_target_with_memory_map_ref_and_bridges_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-target"),
+        bus_interfaces=[
+            ipxact.BusInterface(
+                name="apb",
+                bus_type=_bus_type(),
+                mode=ipxact.InterfaceMode.TARGET,
+                target=ipxact.TargetInterface(
+                    memory_map_ref="mm0", transparent_bridges=[ipxact.TransparentBridge(initiator_ref="init0")]
+                ),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets memory_map_ref and transparent_bridges"):
+        component_to_bytes(component)
+
+
+def test_bus_interface_with_a_second_mode_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-mode"),
+        bus_interfaces=[
+            ipxact.BusInterface(
+                name="apb",
+                bus_type=_bus_type(),
+                mode=ipxact.InterfaceMode.TARGET,
+                initiator=ipxact.InitiatorInterface(address_space_ref="as0"),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="mode TARGET but also sets initiator"):
+        component_to_bytes(component)
+
+
+def test_field_reference_with_address_space_and_memory_map_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-field-reference"),
+        modes=[
+            ipxact.Mode(
+                name="turbo",
+                field_slices=[
+                    ipxact.FieldSlice(
+                        name="fs0",
+                        field_ref=ipxact.FieldReference(
+                            address_space_ref="as0",
+                            memory_map_ref="mm0",
+                            address_block_ref=ipxact.IndexedRef("block"),
+                            register_ref=ipxact.IndexedRef("R"),
+                            field_ref=ipxact.IndexedRef("EN"),
+                        ),
+                    )
+                ],
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets address_space_ref and memory_map_ref"):
+        component_to_bytes(component)
+
+
+def test_write_value_constraint_with_two_arms_is_rejected():
+    constraint = ipxact.WriteValueConstraint(
+        write_as_read=True, minimum=ipxact.Expression("0"), maximum=ipxact.Expression("1")
+    )
+    with pytest.raises(ValueError, match="sets write_as_read and minimum, maximum"):
+        component_to_bytes(_component_with_write_value_constraint(constraint))
+
+
+def test_field_with_bit_width_and_alias_of_is_rejected():
+    field = ipxact.Field(
+        name="F",
+        bit_offset=ipxact.Expression("0"),
+        bit_width=ipxact.Expression("1"),
+        alias_of=ipxact.FieldReference(field_ref=ipxact.IndexedRef("G")),
+    )
+    with pytest.raises(ValueError, match="sets bit_width and alias_of"):
+        component_to_bytes(_component_with_field(field))
+
+
+def test_field_with_definition_ref_and_inline_content_is_rejected():
+    field = ipxact.Field(
+        name="F",
+        bit_offset=ipxact.Expression("0"),
+        bit_width=ipxact.Expression("1"),
+        field_definition_ref=ipxact.DefinitionRef(name="f_def", type_definitions="defs"),
+    )
+    with pytest.raises(ValueError, match="sets field_definition_ref and bit_width"):
+        component_to_bytes(_component_with_field(field))
