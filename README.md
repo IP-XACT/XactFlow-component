@@ -33,11 +33,14 @@ from xactflow_component import ComponentExporter
 
 component = ipxact.parse_file("apb_uart.xml")   # or get one from an importer
 ComponentExporter().export(component, Path("out"))
-# writes out/apb_uart.xml
+# writes out/<vendor>_<library>_<name>_<version>.xml
 ```
 
-The output file is named after the component's VLNV name (`<vlnv.name>.xml`) inside `output_dir`,
-which is created if it does not exist.
+The output file is named after the component's full VLNV (`<vendor>_<library>_<name>_<version>.xml`)
+inside `output_dir`, which is created if it does not exist. Each VLNV part may only hold letters,
+digits, `.`, `_` and `-`; anything else raises `ValueError`. Exporting the same component again
+replaces its file, but a file of that name holding anything else (another VLNV, or not a component)
+raises `FileExistsError`.
 
 Lower-level entry points are available for callers that want the tree or the bytes rather than a
 file:
@@ -55,7 +58,7 @@ Once installed, the exporter registers itself under the `xactflow.exporters` ent
 
 ```bash
 xactflow sv uart.sv --option metadata=uart_ipxact.json --then component --output out/
-# writes out/uart.xml
+# writes out/<vendor>_<library>_uart_<version>.xml
 ```
 
 The `xactflow component <design>` subcommand links a design first and passes the result to the
