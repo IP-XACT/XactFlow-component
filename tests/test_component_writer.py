@@ -207,6 +207,20 @@ def test_vendor_extensions_are_not_reformatted(tmp_path):
     assert _write_and_reparse(reparsed, tmp_path) == reparsed
 
 
+def test_vendor_extensions_keep_processing_instructions_and_comments(tmp_path):
+    # ipxact-compiler returns a processing instruction in vendorExtensions as its own fragment.
+    extensions = ["<?acme-tool keep?>", "<!-- note -->", '<acme:setting xmlns:acme="http://acme.example/ext">on</acme:setting>']
+    component = ipxact.Component(
+        vlnv=ipxact.VLNV("example.org", "ip", "pi", "1.0"),
+        vendor_extensions=extensions,
+    )
+    assert "<ipxact:vendorExtensions>" + "".join(extensions) + "</ipxact:vendorExtensions>" in component_to_bytes(component).decode()
+
+    reparsed = _write_and_reparse(component, tmp_path)
+    assert reparsed.vendor_extensions[0] == "<?acme-tool keep?>"
+    assert _write_and_reparse(reparsed, tmp_path) == reparsed
+
+
 def test_unknown_memory_map_item_is_rejected():
     component = ipxact.Component(
         vlnv=ipxact.VLNV("example.org", "ip", "broken", "1.0"),

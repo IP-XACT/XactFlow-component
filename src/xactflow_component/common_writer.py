@@ -184,7 +184,10 @@ def write_vendor_extensions(parent: etree._Element, extensions: Sequence[str]) -
 
 def _add_raw_fragments(parent: etree._Element, fragments: Sequence[str]) -> None:
     for fragment in fragments:
-        parent.append(etree.fromstring(fragment.encode("utf-8")))
+        # A fragment may be a processing instruction or a comment, which fromstring() rejects
+        # without a root element, so it is parsed inside a wrapper and its nodes moved out.
+        wrapper = etree.fromstring(b"<w>" + fragment.encode("utf-8") + b"</w>")
+        parent.extend(list(wrapper))
     for node in parent.iter():
         if len(node) and node.text is None:
             node.text = ""
