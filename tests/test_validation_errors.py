@@ -395,3 +395,94 @@ def test_field_with_definition_ref_and_inline_content_is_rejected():
     )
     with pytest.raises(ValueError, match="sets field_definition_ref and bit_width"):
         component_to_bytes(_component_with_field(field))
+
+
+def _bank(**fields) -> ipxact.Bank:
+    return ipxact.Bank(name="b", bank_alignment=ipxact.BankAlignment.SERIAL, **fields)
+
+
+def test_initiator_without_address_space_ref_but_base_address_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-initiator"),
+        bus_interfaces=[
+            ipxact.BusInterface(
+                name="apb",
+                bus_type=_bus_type(),
+                mode=ipxact.InterfaceMode.INITIATOR,
+                initiator=ipxact.InitiatorInterface(base_address=ipxact.Expression("0x100")),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets base_address, which the writer only writes with address_space_ref"):
+        component_to_bytes(component)
+
+
+def test_target_with_mode_refs_but_no_memory_map_ref_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-target"),
+        bus_interfaces=[
+            ipxact.BusInterface(
+                name="apb",
+                bus_type=_bus_type(),
+                mode=ipxact.InterfaceMode.TARGET,
+                target=ipxact.TargetInterface(mode_refs=[ipxact.ModeRef("turbo", priority=0)]),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets mode_refs, which the writer only writes with memory_map_ref"):
+        component_to_bytes(component)
+
+
+def test_field_reference_with_memory_remap_ref_but_no_memory_map_ref_is_rejected():
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-field-reference"),
+        indirect_interfaces=[
+            ipxact.IndirectInterface(
+                name="ind0",
+                memory_map_ref="mm0",
+                indirect_address_ref=ipxact.FieldReference(field_ref=ipxact.IndexedRef("ADDR"), memory_remap_ref="r"),
+                indirect_data_ref=ipxact.FieldReference(field_ref=ipxact.IndexedRef("DATA")),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets memory_remap_ref, which the writer only writes with memory_map_ref"):
+        component_to_bytes(component)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"base_address": ipxact.Expression("0x0")},
+        {"type_identifier": "blk_t"},
+        {"address_block_definition_ref": ipxact.DefinitionRef(name="blk_def", type_definitions="defs")},
+        {"misalignment_allowed": False},
+    ],
+)
+def test_block_inside_a_bank_with_unbanked_content_is_rejected(fields):
+    block = ipxact.AddressBlock(name="ab", range=ipxact.Expression("4"), width=ipxact.Expression("32"), **fields)
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-banked-block"),
+        memory_maps=[ipxact.MemoryMap(name="mm", items=[_bank(base_address=ipxact.Expression("0x0"), items=[block])])],
+    )
+    with pytest.raises(ValueError, match=f"sets {next(iter(fields))}, which a block inside a bank cannot hold"):
+        component_to_bytes(component)
+
+
+def test_bank_in_a_local_memory_map_with_definition_ref_is_rejected():
+    bank = _bank(
+        base_address=ipxact.Expression("0x0"),
+        bank_definition_ref=ipxact.DefinitionRef(name="bank_def", type_definitions="defs"),
+    )
+    component = ipxact.Component(
+        vlnv=_vlnv("bad-local-bank"),
+        address_spaces=[
+            ipxact.AddressSpace(
+                name="as",
+                range=ipxact.Expression("0x100"),
+                width=ipxact.Expression("32"),
+                local_memory_map=ipxact.LocalMemoryMap(name="lmm", items=[bank]),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="sets bank_definition_ref, which a bank in a local memory map cannot hold"):
+        component_to_bytes(component)

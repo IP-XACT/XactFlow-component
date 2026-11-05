@@ -63,6 +63,12 @@ def test_a_file_that_is_not_a_component_is_not_overwritten(tmp_path, content):
     assert (tmp_path / "example.org_ip_c_1.0.xml").read_text() == content
 
 
+def test_a_directory_with_the_file_name_is_not_overwritten(tmp_path):
+    (tmp_path / "example.org_ip_c_1.0.xml").mkdir()
+    with pytest.raises(FileExistsError):
+        ComponentExporter().export(_component(), tmp_path)
+
+
 def test_exporter_rejects_a_non_component_subject(tmp_path):
     with pytest.raises(TypeError, match=r"ipxact\.Component"):
         ComponentExporter().export(object(), tmp_path)

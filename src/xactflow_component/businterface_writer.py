@@ -36,6 +36,7 @@ from .common_writer import (
     add_text_values,
     bool_str,
     check_choice,
+    check_unset,
     element,
     set_other_attributes,
     sub,
@@ -96,6 +97,16 @@ def _write_abstraction_type(abstraction_type: AbstractionType) -> etree._Element
 def _add_initiator(parent: etree._Element, initiator: InitiatorInterface) -> None:
     elem = sub(parent, "initiator")
     if initiator.address_space_ref is None:
+        check_unset(
+            "an initiator interface",
+            {
+                "xml_id": initiator.xml_id,
+                "vendor_extensions": initiator.vendor_extensions,
+                "base_address": initiator.base_address,
+                "mode_refs": initiator.mode_refs,
+            },
+            "the writer only writes with address_space_ref",
+        )
         return
     ref_elem = sub(elem, "addressSpaceRef", xml_id=initiator.xml_id, addressSpaceRef=initiator.address_space_ref)
     # addrSpaceRefType's own vendorExtensions come first: the extension adds baseAddress and modeRef after them.
@@ -116,6 +127,7 @@ def _add_target(parent: etree._Element, target: TargetInterface) -> None:
         ref_elem = sub(elem, "memoryMapRef", memoryMapRef=target.memory_map_ref)
         add_mode_refs(ref_elem, target.mode_refs)
     else:
+        check_unset("a target interface", {"mode_refs": target.mode_refs}, "the writer only writes with memory_map_ref")
         _add_transparent_bridges(elem, target.transparent_bridges)
     for group in target.file_set_ref_groups:
         add_file_set_ref_group(elem, group)

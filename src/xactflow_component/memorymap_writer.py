@@ -40,6 +40,7 @@ from .common_writer import (
     add_text,
     bool_str,
     check_choice,
+    check_unset,
     element,
     sub,
     write_vendor_extensions,
@@ -331,7 +332,20 @@ def _add_address_block(parent: etree._Element, block: AddressBlock, banked: bool
     )
     add_name_group(elem, block)
     add_access_handles(elem, block.access_handles)
-    if not banked:
+    if banked:
+        check_unset(
+            f"address block {block.name!r}",
+            {
+                "base_address": block.base_address,
+                "array": block.array,
+                "type_identifier": block.type_identifier,
+                "address_block_definition_ref": block.address_block_definition_ref,
+                # Only False differs from the schema default, which is not written.
+                "misalignment_allowed": None if block.misalignment_allowed else False,
+            },
+            "a block inside a bank cannot hold",
+        )
+    else:
         add_memory_array(elem, block.array)
         add_expression(elem, "baseAddress", block.base_address)
         check_choice(
@@ -369,7 +383,13 @@ def _add_subspace_map(parent: etree._Element, subspace_map: SubspaceMap, banked:
         segmentRef=None if banked else subspace_map.segment_ref,
     )
     add_name_group(elem, subspace_map)
-    if not banked:
+    if banked:
+        check_unset(
+            f"subspace map {subspace_map.name!r}",
+            {"segment_ref": subspace_map.segment_ref, "base_address": subspace_map.base_address},
+            "a subspace map inside a bank cannot hold",
+        )
+    else:
         add_expression(elem, "baseAddress", subspace_map.base_address)
     add_parameters(elem, subspace_map.parameters)
     write_vendor_extensions(elem, subspace_map.vendor_extensions)
@@ -384,8 +404,17 @@ def _add_bank(parent: etree._Element, bank: Bank, banked: bool, allow_subspace: 
     elem = sub(parent, "bank", xml_id=bank.xml_id, bankAlignment=bank.bank_alignment.value)
     add_name_group(elem, bank)
     add_access_handles(elem, bank.access_handles, with_force=False)
-    if not banked:
+    if banked:
+        check_unset(f"bank {bank.name!r}", {"base_address": bank.base_address}, "a bank inside a bank cannot hold")
+    else:
         add_expression(elem, "baseAddress", bank.base_address)
+    if not allow_subspace:
+        # The localMemoryMap bank types have no definition reference.
+        check_unset(
+            f"bank {bank.name!r}",
+            {"bank_definition_ref": bank.bank_definition_ref},
+            "a bank in a local memory map cannot hold",
+        )
     check_choice(
         f"bank {bank.name!r}",
         {"bank_definition_ref": bank.bank_definition_ref},

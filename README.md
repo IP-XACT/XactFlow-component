@@ -64,7 +64,7 @@ xactflow sv uart.sv --option metadata=uart_ipxact.json --then component --output
 The `xactflow component <design>` subcommand links a design first and passes the result to the
 exporter, so it fails until `LinkedDesign` is supported (see below).
 
-`export()` raises `TypeError` for anything that is not an `ipxact.Component`. Accepting an
+`export()` raises `TypeError` for anything that is not an `ipxact.Component`. Accepting a
 `LinkedDesign` (flattening a resolved multi-instance design into one boundary component) is a
 planned later addition, not an oversight.
 
@@ -81,7 +81,7 @@ planned later addition, not an oversight.
   `.value`, which is emitted unchanged, never evaluated or reformatted, together with its
   `minimum`/`maximum`, `xml:id` and attributes from other namespaces.
 - **Vendor extensions stay identical.** Their content is not IP-XACT's to define, so each
-  fragment is re-inserted as parsed.
+  fragment is re-inserted as parsed (only a leading XML declaration is dropped).
 - **Defaults are omitted.** Attributes and elements whose value equals the schema default
   (`resolve="immediate"`, `type="string"`, `misalignmentAllowed="true"`, `connectionRequired`
   false, and so on) are left out, which keeps the output close to hand-written IP-XACT and still
@@ -92,7 +92,8 @@ planned later addition, not an oversight.
   together, or expose each arm of a choice (`wire`/`transactional`/`structured`, a
   `*DefinitionRef` and the content it replaces, ...) as its own field. Rather than silently writing
   an incomplete element, or writing one arm and dropping the others, the writer raises a specific
-  error naming the fields involved.
+  error naming the fields involved. The same goes for a field set where the schema has no place
+  for it, such as a `base_address` on a block inside a bank.
 
 ## Known gaps
 

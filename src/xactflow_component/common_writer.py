@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Callable, Iterable, Mapping, Optional, Sequence, TypeVar
 
 from lxml import etree
@@ -53,6 +54,7 @@ XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance"
 SCHEMA_LOCATION = f"{NAMESPACE} {NAMESPACE}/index.xsd"
 XML_ID = "{http://www.w3.org/XML/1998/namespace}id"
 _NSMAP = {"ipxact": NAMESPACE}
+_XML_DECLARATION = re.compile(r"\s*<\?xml\s[^>]*\?>")
 
 T = TypeVar("T")
 
@@ -154,16 +156,27 @@ def add_items(parent: etree._Element, container_tag: str, items: Sequence[T], wr
         container.append(writer(item))
 
 
+def _set_fields(fields: dict) -> list:
+    """Names of the fields that are set: not None and not an empty list."""
+    return [name for name, value in fields.items() if value is not None and value != []]
+
+
 def check_choice(what: str, *arms: dict) -> None:
     """Raise ValueError when more than one arm of an XSD choice is set.
 
-    Each arm maps the fields it is made of to their values; a field is set when it is not None
-    or an empty list. Only one arm can be written, so the others would be silently dropped.
+    Each arm maps the fields it is made of to their values. Only one arm can be written, so the
+    others would be silently dropped.
     """
-    set_arms = [[name for name, value in arm.items() if value is not None and value != []] for arm in arms]
-    set_arms = [", ".join(names) for names in set_arms if names]
+    set_arms = [", ".join(names) for names in map(_set_fields, arms) if names]
     if len(set_arms) > 1:
         raise ValueError(f"{what} sets {' and '.join(set_arms)}, but the schema allows only one of them")
+
+
+def check_unset(what: str, fields: dict, reason: str) -> None:
+    """Raise ValueError when one of fields is set although the writer has nowhere to write it."""
+    names = _set_fields(fields)
+    if names:
+        raise ValueError(f"{what} sets {', '.join(names)}, which {reason}")
 
 
 def add_name_group(parent: etree._Element, item: object) -> None:
@@ -196,9 +209,18 @@ def write_vendor_extensions(parent: etree._Element, extensions: Sequence[str]) -
 
 def _add_raw_fragments(parent: etree._Element, fragments: Sequence[str]) -> None:
     for fragment in fragments:
-        # A fragment may be a processing instruction or a comment, which fromstring() rejects
-        # without a root element, so it is parsed inside a wrapper and its nodes moved out.
+        # A fragment may be a processing instruction, a comment or text, which fromstring() rejects
+        # without a root element, so it is parsed inside a wrapper and its content moved out. An
+        # XML declaration is only allowed at the start of a document, so it is dropped first.
+        declaration = _XML_DECLARATION.match(fragment)
+        if declaration:
+            fragment = fragment[declaration.end():]
         wrapper = etree.fromstring(b"<w>" + fragment.encode("utf-8") + b"</w>")
+        if wrapper.text:
+            if len(parent):
+                parent[-1].tail = (parent[-1].tail or "") + wrapper.text
+            else:
+                parent.text = (parent.text or "") + wrapper.text
         parent.extend(list(wrapper))
     for node in parent.iter():
         if len(node) and node.text is None:
@@ -315,6 +337,12 @@ def add_field_reference_group(parent: etree._Element, reference: FieldReference,
         {"address_space_ref": reference.address_space_ref},
         {"memory_map_ref": reference.memory_map_ref, "memory_remap_ref": reference.memory_remap_ref},
     )
+    if reference.memory_map_ref is None:
+        check_unset(
+            "a field reference",
+            {"memory_remap_ref": reference.memory_remap_ref},
+            "the writer only writes with memory_map_ref",
+        )
     if reference.address_space_ref is not None:
         sub(parent, "addressSpaceRef", addressSpaceRef=reference.address_space_ref)
     elif reference.memory_map_ref is not None:
