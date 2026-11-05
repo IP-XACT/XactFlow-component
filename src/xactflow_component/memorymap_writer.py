@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 
 from lxml import etree
 
+from ipxact.schema.common import FieldReference
 from ipxact.schema.memorymap import (
     AccessPolicy,
     AccessRestriction,
@@ -24,11 +25,15 @@ from ipxact.schema.memorymap import (
     SubspaceMap,
     WriteValueConstraint,
 )
-from ipxact.schema.common import MemoryArray
 
 from .common_writer import (
+    add_access_handles,
     add_bool,
+    add_definition_ref,
+    add_expression,
+    add_field_reference_group,
     add_items,
+    add_memory_array,
     add_mode_refs,
     add_name_group,
     add_parameters,
@@ -40,25 +45,17 @@ from .common_writer import (
 )
 
 
-def _add_memory_array(parent: etree._Element, array: Optional[MemoryArray], stride_tag: str = "stride") -> None:
-    """Write ipxact:array. Registers use ipxact:stride, fields use ipxact:bitStride."""
-    if array is None:
-        return
-    elem = sub(parent, "array")
-    for dim in array.dims:
-        sub(elem, "dim", dim.size, indexVar=dim.index_var)
-    add_text(elem, stride_tag, array.stride)
+def _write_access_policy(policy: AccessPolicy) -> etree._Element:
+    elem = element("accessPolicy", xml_id=policy.xml_id)
+    add_mode_refs(elem, policy.mode_refs)
+    if policy.access is not None:
+        sub(elem, "access", policy.access.value)
+    write_vendor_extensions(elem, policy.vendor_extensions)
+    return elem
 
 
 def add_access_policies(parent: etree._Element, access_policies: Sequence[AccessPolicy]) -> None:
-    if not access_policies:
-        return
-    container = sub(parent, "accessPolicies")
-    for policy in access_policies:
-        elem = sub(container, "accessPolicy")
-        add_mode_refs(elem, policy.mode_refs)
-        if policy.access is not None:
-            sub(elem, "access", policy.access.value)
+    add_items(parent, "accessPolicies", access_policies, _write_access_policy)
 
 
 def _add_memory_block_data(
@@ -76,25 +73,23 @@ def _add_memory_block_data(
     add_parameters(parent, parameters)
 
 
-def _add_reset(parent: etree._Element, reset: Reset) -> None:
-    elem = sub(parent, "reset", resetTypeRef=reset.reset_type_ref)
-    sub(elem, "value", reset.value)
-    add_text(elem, "mask", reset.mask)
+def _write_reset(reset: Reset) -> etree._Element:
+    elem = element("reset", xml_id=reset.xml_id, resetTypeRef=reset.reset_type_ref)
+    add_expression(elem, "value", reset.value)
+    add_expression(elem, "mask", reset.mask)
+    return elem
 
 
-def _add_enumerated_value(parent: etree._Element, enumerated_value: EnumeratedValue) -> None:
-    elem = sub(
-        parent,
+def _write_enumerated_value(enumerated_value: EnumeratedValue) -> etree._Element:
+    elem = element(
         "enumeratedValue",
+        xml_id=enumerated_value.xml_id,
         usage=enumerated_value.usage if enumerated_value.usage != "read-write" else None,
     )
-    add_name_group(
-        elem,
-        enumerated_value.name,
-        enumerated_value.display_name,
-        description=enumerated_value.description,
-    )
-    sub(elem, "value", enumerated_value.value)
+    add_name_group(elem, enumerated_value)
+    add_expression(elem, "value", enumerated_value.value)
+    write_vendor_extensions(elem, enumerated_value.vendor_extensions)
+    return elem
 
 
 def _add_write_value_constraint(parent: etree._Element, constraint: Optional[WriteValueConstraint]) -> None:
@@ -108,8 +103,8 @@ def _add_write_value_constraint(parent: etree._Element, constraint: Optional[Wri
     elif constraint.use_enumerated_values is not None:
         sub(elem, "useEnumeratedValues", bool_str(constraint.use_enumerated_values))
     elif constraint.minimum is not None and constraint.maximum is not None:
-        sub(elem, "minimum", constraint.minimum)
-        sub(elem, "maximum", constraint.maximum)
+        add_expression(elem, "minimum", constraint.minimum)
+        add_expression(elem, "maximum", constraint.maximum)
     else:
         raise ValueError(
             "a write value constraint requires write_as_read, use_enumerated_values, "
@@ -117,32 +112,37 @@ def _add_write_value_constraint(parent: etree._Element, constraint: Optional[Wri
         )
 
 
-def _add_access_restriction(parent: etree._Element, restriction: AccessRestriction) -> None:
-    elem = sub(parent, "accessRestriction")
+def _write_access_restriction(restriction: AccessRestriction) -> etree._Element:
+    elem = element("accessRestriction", xml_id=restriction.xml_id)
     add_mode_refs(elem, restriction.mode_refs)
-    add_text(elem, "readAccessMask", restriction.read_access_mask)
-    add_text(elem, "writeAccessMask", restriction.write_access_mask)
+    add_expression(elem, "readAccessMask", restriction.read_access_mask)
+    add_expression(elem, "writeAccessMask", restriction.write_access_mask)
+    return elem
 
 
-def _add_field_access_policy(parent: etree._Element, policy: FieldAccessPolicy) -> None:
-    elem = sub(parent, "fieldAccessPolicy")
+def _write_broadcast_to(reference: FieldReference) -> etree._Element:
+    elem = element("broadcastTo", xml_id=reference.xml_id)
+    add_field_reference_group(elem, reference)
+    return elem
+
+
+def _write_field_access_policy(policy: FieldAccessPolicy) -> etree._Element:
+    elem = element("fieldAccessPolicy", xml_id=policy.xml_id)
     add_mode_refs(elem, policy.mode_refs)
-    if policy.access is not None:
-        sub(elem, "access", policy.access.value)
-    if policy.modified_write_value is not None:
-        sub(elem, "modifiedWriteValue", policy.modified_write_value.value)
-    _add_write_value_constraint(elem, policy.write_value_constraint)
-    if policy.read_action is not None:
-        sub(elem, "readAction", policy.read_action.value)
-    add_text(elem, "readResponse", policy.read_response)
-    if policy.broadcast_to:
-        broadcasts = sub(elem, "broadcasts")
-        for field_ref in policy.broadcast_to:
-            sub(sub(broadcasts, "broadcastTo"), "fieldRef", fieldRef=field_ref)
-    if policy.access_restrictions:
-        restrictions = sub(elem, "accessRestrictions")
-        for restriction in policy.access_restrictions:
-            _add_access_restriction(restrictions, restriction)
+    # The definition reference replaces the inline access/.../readResponse content.
+    if policy.field_access_policy_definition_ref is not None:
+        add_definition_ref(elem, "fieldAccessPolicyDefinitionRef", policy.field_access_policy_definition_ref)
+    else:
+        if policy.access is not None:
+            sub(elem, "access", policy.access.value)
+        if policy.modified_write_value is not None:
+            sub(elem, "modifiedWriteValue", policy.modified_write_value.value, modify=policy.modified_write_value_modify)
+        _add_write_value_constraint(elem, policy.write_value_constraint)
+        if policy.read_action is not None:
+            sub(elem, "readAction", policy.read_action.value, modify=policy.read_action_modify)
+        add_expression(elem, "readResponse", policy.read_response)
+    add_items(elem, "broadcasts", policy.broadcast_to, _write_broadcast_to)
+    add_items(elem, "accessRestrictions", policy.access_restrictions, _write_access_restriction)
     if policy.testable is not None:
         sub(
             elem,
@@ -150,41 +150,49 @@ def _add_field_access_policy(parent: etree._Element, policy: FieldAccessPolicy) 
             bool_str(policy.testable),
             testConstraint=policy.test_constraint.value if policy.test_constraint is not None else None,
         )
-    add_text(elem, "reserved", policy.reserved)
+    add_expression(elem, "reserved", policy.reserved)
+    write_vendor_extensions(elem, policy.vendor_extensions)
+    return elem
 
 
 def _add_field(parent: etree._Element, field: Field) -> None:
-    elem = sub(parent, "field")
-    add_name_group(elem, field.name, field.display_name, description=field.description)
-    _add_memory_array(elem, field.array, stride_tag="bitStride")
-    sub(elem, "bitOffset", field.bit_offset)
-    sub(elem, "bitWidth", field.bit_width)
-    add_bool(elem, "volatile", field.volatile)
-    if field.resets:
-        resets = sub(elem, "resets")
-        for reset in field.resets:
-            _add_reset(resets, reset)
-    if field.field_access_policies:
-        policies = sub(elem, "fieldAccessPolicies")
-        for policy in field.field_access_policies:
-            _add_field_access_policy(policies, policy)
-    if field.enumerated_values:
-        enumerated_values = sub(elem, "enumeratedValues")
-        for enumerated_value in field.enumerated_values:
-            _add_enumerated_value(enumerated_values, enumerated_value)
+    elem = sub(parent, "field", xml_id=field.xml_id)
+    add_name_group(elem, field)
+    add_access_handles(elem, field.access_handles)
+    add_memory_array(elem, field.array, stride_tag="bitStride")
+    add_expression(elem, "bitOffset", field.bit_offset)
+    # The field definition reference replaces everything up to the parameters.
+    if field.field_definition_ref is not None:
+        add_definition_ref(elem, "fieldDefinitionRef", field.field_definition_ref)
+    else:
+        add_text(elem, "typeIdentifier", field.type_identifier)
+        # bitWidth (with volatile and resets) and aliasOf are the two arms of a required choice.
+        if field.bit_width is not None:
+            add_expression(elem, "bitWidth", field.bit_width)
+            add_bool(elem, "volatile", field.volatile)
+            add_items(elem, "resets", field.resets, _write_reset)
+        elif field.alias_of is not None:
+            add_field_reference_group(sub(elem, "aliasOf"), field.alias_of)
+        else:
+            raise ValueError(f"field {field.name!r} requires bit_width, alias_of or field_definition_ref")
+        if field.field_access_policies:
+            policies = sub(elem, "fieldAccessPolicies", xml_id=field.field_access_policies_xml_id)
+            for policy in field.field_access_policies:
+                policies.append(_write_field_access_policy(policy))
+        if field.enumeration_definition_ref is not None:
+            add_definition_ref(sub(elem, "enumeratedValues"), "enumerationDefinitionRef", field.enumeration_definition_ref)
+        else:
+            add_items(elem, "enumeratedValues", field.enumerated_values, _write_enumerated_value)
     add_parameters(elem, field.parameters)
     write_vendor_extensions(elem, field.vendor_extensions)
 
 
 def _add_alternate_register(parent: etree._Element, alternate_register: AlternateRegister) -> None:
-    elem = sub(parent, "alternateRegister")
-    add_name_group(
-        elem,
-        alternate_register.name,
-        alternate_register.display_name,
-        description=alternate_register.description,
-    )
+    elem = sub(parent, "alternateRegister", xml_id=alternate_register.xml_id)
+    add_name_group(elem, alternate_register)
+    add_access_handles(elem, alternate_register.access_handles, with_force=False)
     add_mode_refs(elem, alternate_register.mode_refs)
+    add_text(elem, "typeIdentifier", alternate_register.type_identifier)
     add_bool(elem, "volatile", alternate_register.volatile)
     add_access_policies(elem, alternate_register.access_policies)
     for field in alternate_register.fields:
@@ -194,15 +202,20 @@ def _add_alternate_register(parent: etree._Element, alternate_register: Alternat
 
 
 def _add_register(parent: etree._Element, register: Register) -> None:
-    elem = sub(parent, "register")
-    add_name_group(elem, register.name, register.display_name, description=register.description)
-    _add_memory_array(elem, register.array)
-    sub(elem, "addressOffset", register.address_offset)
-    sub(elem, "size", register.size)
-    add_bool(elem, "volatile", register.volatile)
-    add_access_policies(elem, register.access_policies)
-    for field in register.fields:
-        _add_field(elem, field)
+    elem = sub(parent, "register", xml_id=register.xml_id)
+    add_name_group(elem, register)
+    add_access_handles(elem, register.access_handles, with_force=False)
+    add_memory_array(elem, register.array)
+    add_expression(elem, "addressOffset", register.address_offset)
+    if register.register_definition_ref is not None:
+        add_definition_ref(elem, "registerDefinitionRef", register.register_definition_ref)
+    else:
+        add_text(elem, "typeIdentifier", register.type_identifier)
+        add_expression(elem, "size", register.size)
+        add_bool(elem, "volatile", register.volatile)
+        add_access_policies(elem, register.access_policies)
+        for field in register.fields:
+            _add_field(elem, field)
     if register.alternate_registers:
         alternate_registers = sub(elem, "alternateRegisters")
         for alternate_register in register.alternate_registers:
@@ -212,13 +225,18 @@ def _add_register(parent: etree._Element, register: Register) -> None:
 
 
 def _add_register_file(parent: etree._Element, register_file: RegisterFile) -> None:
-    elem = sub(parent, "registerFile")
-    add_name_group(elem, register_file.name, register_file.display_name, description=register_file.description)
-    _add_memory_array(elem, register_file.array)
-    sub(elem, "addressOffset", register_file.address_offset)
-    sub(elem, "range", register_file.range)
-    add_access_policies(elem, register_file.access_policies)
-    _add_registers(elem, register_file.registers)
+    elem = sub(parent, "registerFile", xml_id=register_file.xml_id)
+    add_name_group(elem, register_file)
+    add_access_handles(elem, register_file.access_handles, with_force=False)
+    add_memory_array(elem, register_file.array)
+    add_expression(elem, "addressOffset", register_file.address_offset)
+    if register_file.register_file_definition_ref is not None:
+        add_definition_ref(elem, "registerFileDefinitionRef", register_file.register_file_definition_ref)
+    else:
+        add_text(elem, "typeIdentifier", register_file.type_identifier)
+        add_expression(elem, "range", register_file.range)
+        add_access_policies(elem, register_file.access_policies)
+        _add_registers(elem, register_file.registers)
     add_parameters(elem, register_file.parameters)
     write_vendor_extensions(elem, register_file.vendor_extensions)
 
@@ -236,19 +254,27 @@ def _add_registers(parent: etree._Element, registers: Sequence[object]) -> None:
 def _add_address_block(parent: etree._Element, block: AddressBlock, banked: bool) -> None:
     """Write an addressBlock.
 
-    A banked block uses the schema's separate bankedBlockType, which carries neither a
-    baseAddress nor the misalignmentAllowed attribute.
+    A banked block uses the schema's separate bankedBlockType, which carries no baseAddress,
+    array, typeIdentifier, definition reference or misalignmentAllowed attribute.
     """
     elem = sub(
         parent,
         "addressBlock",
+        xml_id=block.xml_id,
         misalignmentAllowed=None if banked or block.misalignment_allowed else bool_str(False),
     )
-    add_name_group(elem, block.name, block.display_name, description=block.description)
+    add_name_group(elem, block)
+    add_access_handles(elem, block.access_handles)
     if not banked:
-        add_text(elem, "baseAddress", block.base_address)
-    sub(elem, "range", block.range)
-    sub(elem, "width", block.width)
+        add_memory_array(elem, block.array)
+        add_expression(elem, "baseAddress", block.base_address)
+        if block.address_block_definition_ref is not None:
+            add_definition_ref(elem, "addressBlockDefinitionRef", block.address_block_definition_ref)
+            write_vendor_extensions(elem, block.vendor_extensions)
+            return
+        add_text(elem, "typeIdentifier", block.type_identifier)
+    add_expression(elem, "range", block.range)
+    add_expression(elem, "width", block.width)
     _add_memory_block_data(elem, block.usage, block.volatile, block.access_policies, block.parameters)
     _add_registers(elem, block.registers)
     write_vendor_extensions(elem, block.vendor_extensions)
@@ -258,12 +284,13 @@ def _add_subspace_map(parent: etree._Element, subspace_map: SubspaceMap, banked:
     elem = sub(
         parent,
         "subspaceMap",
+        xml_id=subspace_map.xml_id,
         initiatorRef=subspace_map.initiator_ref,
         segmentRef=None if banked else subspace_map.segment_ref,
     )
-    add_name_group(elem, subspace_map.name, subspace_map.display_name, description=subspace_map.description)
+    add_name_group(elem, subspace_map)
     if not banked:
-        add_text(elem, "baseAddress", subspace_map.base_address)
+        add_expression(elem, "baseAddress", subspace_map.base_address)
     add_parameters(elem, subspace_map.parameters)
     write_vendor_extensions(elem, subspace_map.vendor_extensions)
 
@@ -274,12 +301,16 @@ def _add_bank(parent: etree._Element, bank: Bank, banked: bool, allow_subspace: 
     A bank nested inside another bank uses the schema's separate bankedBankType, which
     carries no baseAddress, matching AddressBlock/SubspaceMap's own banked distinction.
     """
-    elem = sub(parent, "bank", bankAlignment=bank.bank_alignment.value)
-    add_name_group(elem, bank.name, bank.display_name, description=bank.description)
+    elem = sub(parent, "bank", xml_id=bank.xml_id, bankAlignment=bank.bank_alignment.value)
+    add_name_group(elem, bank)
+    add_access_handles(elem, bank.access_handles, with_force=False)
     if not banked:
-        add_text(elem, "baseAddress", bank.base_address)
-    _add_memory_map_items(elem, bank.items, banked=True, allow_subspace=allow_subspace)
-    _add_memory_block_data(elem, bank.usage, bank.volatile, bank.access_policies, bank.parameters)
+        add_expression(elem, "baseAddress", bank.base_address)
+    if bank.bank_definition_ref is not None:
+        add_definition_ref(elem, "bankDefinitionRef", bank.bank_definition_ref)
+    else:
+        _add_memory_map_items(elem, bank.items, banked=True, allow_subspace=allow_subspace)
+        _add_memory_block_data(elem, bank.usage, bank.volatile, bank.access_policies, bank.parameters)
     write_vendor_extensions(elem, bank.vendor_extensions)
 
 
@@ -303,22 +334,28 @@ def _add_memory_map_items(
 
 
 def _add_memory_remap(parent: etree._Element, memory_remap: MemoryRemap) -> None:
-    elem = sub(parent, "memoryRemap")
-    add_name_group(elem, memory_remap.name, memory_remap.display_name, description=memory_remap.description)
+    elem = sub(parent, "memoryRemap", xml_id=memory_remap.xml_id)
+    add_name_group(elem, memory_remap)
     add_mode_refs(elem, memory_remap.mode_refs)
-    _add_memory_map_items(elem, memory_remap.items)
+    if memory_remap.remap_definition_ref is not None:
+        add_definition_ref(elem, "remapDefinitionRef", memory_remap.remap_definition_ref)
+    else:
+        _add_memory_map_items(elem, memory_remap.items)
     write_vendor_extensions(elem, memory_remap.vendor_extensions)
 
 
 def write_memory_map(memory_map: MemoryMap) -> etree._Element:
-    elem = element("memoryMap")
-    add_name_group(elem, memory_map.name, memory_map.display_name, description=memory_map.description)
-    _add_memory_map_items(elem, memory_map.items)
-    for memory_remap in memory_map.memory_remaps:
-        _add_memory_remap(elem, memory_remap)
-    add_text(elem, "addressUnitBits", memory_map.address_unit_bits)
-    if memory_map.shared is not None:
-        sub(elem, "shared", memory_map.shared.value)
+    elem = element("memoryMap", xml_id=memory_map.xml_id)
+    add_name_group(elem, memory_map)
+    if memory_map.memory_map_definition_ref is not None:
+        add_definition_ref(elem, "memoryMapDefinitionRef", memory_map.memory_map_definition_ref)
+    else:
+        _add_memory_map_items(elem, memory_map.items)
+        for memory_remap in memory_map.memory_remaps:
+            _add_memory_remap(elem, memory_remap)
+        add_expression(elem, "addressUnitBits", memory_map.address_unit_bits)
+        if memory_map.shared is not None:
+            sub(elem, "shared", memory_map.shared.value)
     write_vendor_extensions(elem, memory_map.vendor_extensions)
     return elem
 
@@ -328,35 +365,28 @@ def add_memory_maps(parent: etree._Element, memory_maps: Sequence[MemoryMap]) ->
 
 
 def _add_local_memory_map(parent: etree._Element, local_memory_map: LocalMemoryMap) -> None:
-    elem = sub(parent, "localMemoryMap")
-    add_name_group(
-        elem,
-        local_memory_map.name,
-        local_memory_map.display_name,
-        description=local_memory_map.description,
-    )
+    elem = sub(parent, "localMemoryMap", xml_id=local_memory_map.xml_id)
+    add_name_group(elem, local_memory_map)
     _add_memory_map_items(elem, local_memory_map.items, allow_subspace=False)
     write_vendor_extensions(elem, local_memory_map.vendor_extensions)
 
 
-def _add_segment(parent: etree._Element, segment: Segment) -> None:
-    elem = sub(parent, "segment")
-    add_name_group(elem, segment.name, segment.display_name, description=segment.description)
-    sub(elem, "addressOffset", segment.address_offset)
-    sub(elem, "range", segment.range)
+def _write_segment(segment: Segment) -> etree._Element:
+    elem = element("segment", xml_id=segment.xml_id)
+    add_name_group(elem, segment)
+    add_expression(elem, "addressOffset", segment.address_offset)
+    add_expression(elem, "range", segment.range)
     write_vendor_extensions(elem, segment.vendor_extensions)
+    return elem
 
 
 def write_address_space(address_space: AddressSpace) -> etree._Element:
-    elem = element("addressSpace")
-    add_name_group(elem, address_space.name, address_space.display_name, description=address_space.description)
-    sub(elem, "range", address_space.range)
-    sub(elem, "width", address_space.width)
-    if address_space.segments:
-        segments = sub(elem, "segments")
-        for segment in address_space.segments:
-            _add_segment(segments, segment)
-    add_text(elem, "addressUnitBits", address_space.address_unit_bits)
+    elem = element("addressSpace", xml_id=address_space.xml_id)
+    add_name_group(elem, address_space)
+    add_expression(elem, "range", address_space.range)
+    add_expression(elem, "width", address_space.width)
+    add_items(elem, "segments", address_space.segments, _write_segment)
+    add_expression(elem, "addressUnitBits", address_space.address_unit_bits)
     if address_space.local_memory_map is not None:
         _add_local_memory_map(elem, address_space.local_memory_map)
     add_parameters(elem, address_space.parameters)

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
+import importlib
+from collections import defaultdict
 from pathlib import Path
 
 import ipxact
@@ -54,6 +57,48 @@ def test_banked_component_round_trips(tmp_path):
     assert _write_and_reparse(component, tmp_path) == component
 
 
+def _field_default(field: dataclasses.Field) -> object:
+    if field.default is not dataclasses.MISSING:
+        return field.default
+    if field.default_factory is not dataclasses.MISSING:
+        return field.default_factory()
+    return dataclasses.MISSING
+
+
+def _collect_set_fields(value: object, set_fields: dict) -> None:
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        for field in dataclasses.fields(value):
+            field_value = getattr(value, field.name)
+            if field_value != _field_default(field):
+                set_fields[type(value)].add(field.name)
+            _collect_set_fields(field_value, set_fields)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _collect_set_fields(item, set_fields)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _collect_set_fields(item, set_fields)
+
+
+def test_fixtures_set_every_component_field():
+    """A field the writer forgets only shows up in a round trip if some fixture sets it.
+
+    So between them the hand-built components must set every field of every dataclass a
+    Component can contain; when ipxact-compiler adds one, this fails until a fixture uses it.
+    """
+    set_fields: dict = defaultdict(set)
+    _collect_set_fields(build_wide_component(), set_fields)
+    _collect_set_fields(build_banked_component(), set_fields)
+
+    unset = []
+    for module_name in ("businterface", "common", "component", "component_sections", "memorymap", "model", "ports"):
+        module = importlib.import_module(f"ipxact.schema.{module_name}")
+        for name, cls in vars(module).items():
+            if dataclasses.is_dataclass(cls) and cls.__module__ == module.__name__:
+                unset += [f"{name}.{f.name}" for f in dataclasses.fields(cls) if f.name not in set_fields[cls]]
+    assert unset == []
+
+
 def test_structured_port_with_type_defs_is_schema_valid(component_schema, tmp_path):
     """A populated structPortTypeDefs makes a structured port satisfy the XSD on its own.
 
@@ -93,16 +138,16 @@ def test_expressions_are_written_verbatim(tmp_path):
                 items=[
                     ipxact.AddressBlock(
                         name="block",
-                        range="WIDTH*4",
-                        width="8 + OFFSET",
-                        base_address="0x0000_0000",
+                        range=ipxact.Expression("WIDTH*4"),
+                        width=ipxact.Expression("8 + OFFSET"),
+                        base_address=ipxact.Expression("0x0000_0000"),
                         registers=[
                             ipxact.Register(
                                 name="R",
-                                address_offset="BASE + 4",
-                                size="32",
+                                address_offset=ipxact.Expression("BASE + 4"),
+                                size=ipxact.Expression("32"),
                                 fields=[
-                                    ipxact.Field(name="F", bit_offset="LSB", bit_width="MSB-LSB+1")
+                                    ipxact.Field(name="F", bit_offset=ipxact.Expression("LSB"), bit_width=ipxact.Expression("MSB-LSB+1"))
                                 ],
                             )
                         ],
@@ -116,7 +161,7 @@ def test_expressions_are_written_verbatim(tmp_path):
         assert f">{expression}<" in text
 
 
-def test_register_arrays_use_stride_and_field_arrays_use_bit_stride(component_schema):
+def test_register_arrays_use_stride_and_field_arrays_use_bit_stride(component_schema, tmp_path):
     component = ipxact.Component(
         vlnv=ipxact.VLNV("example.org", "ip", "arrays", "1.0"),
         memory_maps=[
@@ -125,22 +170,22 @@ def test_register_arrays_use_stride_and_field_arrays_use_bit_stride(component_sc
                 items=[
                     ipxact.AddressBlock(
                         name="block",
-                        range="0x10",
-                        width="32",
-                        base_address="0x0",
+                        range=ipxact.Expression("0x10"),
+                        width=ipxact.Expression("32"),
+                        base_address=ipxact.Expression("0x0"),
                         registers=[
                             ipxact.Register(
                                 name="R",
-                                address_offset="0x0",
-                                size="32",
-                                array=ipxact.MemoryArray(dims=[ipxact.ArrayDim(size="4")], stride="4"),
+                                address_offset=ipxact.Expression("0x0"),
+                                size=ipxact.Expression("32"),
+                                array=ipxact.MemoryArray(dims=[ipxact.ArrayDim(size=ipxact.Expression("4"))], stride=ipxact.Expression("4")),
                                 fields=[
                                     ipxact.Field(
                                         name="F",
-                                        bit_offset="0",
-                                        bit_width="1",
+                                        bit_offset=ipxact.Expression("0"),
+                                        bit_width=ipxact.Expression("1"),
                                         array=ipxact.MemoryArray(
-                                            dims=[ipxact.ArrayDim(size="2")], stride="1"
+                                            dims=[ipxact.ArrayDim(size=ipxact.Expression("2"))], stride=ipxact.Expression("1")
                                         ),
                                     )
                                 ],
@@ -157,6 +202,7 @@ def test_register_arrays_use_stride_and_field_arrays_use_bit_stride(component_sc
     text = written.decode()
     assert "<ipxact:stride>4</ipxact:stride>" in text
     assert "<ipxact:bitStride>1</ipxact:bitStride>" in text
+    assert _write_and_reparse(component, tmp_path) == component
 
 
 def test_vendor_extensions_are_not_reformatted(tmp_path):

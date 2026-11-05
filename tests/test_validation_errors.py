@@ -28,7 +28,7 @@ def test_field_slice_reference_without_address_block_ref_is_rejected():
                 field_slices=[
                     ipxact.FieldSlice(
                         name="fs0",
-                        field_ref=ipxact.FieldReference(field_ref="EN", memory_map_ref="mm0"),
+                        field_ref=ipxact.FieldReference(field_ref=ipxact.IndexedRef("EN"), memory_map_ref="mm0"),
                     )
                 ],
             )
@@ -90,7 +90,7 @@ def test_mirrored_target_with_range_but_no_remap_addresses_is_rejected():
                 name="mtgt0",
                 bus_type=_bus_type(),
                 mode=ipxact.InterfaceMode.MIRRORED_TARGET,
-                mirrored_target=ipxact.MirroredTargetInterface(range="0x1000"),
+                mirrored_target=ipxact.MirroredTargetInterface(range=ipxact.Expression("0x1000")),
             )
         ],
     )
@@ -136,8 +136,8 @@ def test_indirect_interface_without_memory_map_ref_or_bridges_is_rejected():
         indirect_interfaces=[
             ipxact.IndirectInterface(
                 name="ind0",
-                indirect_address_ref=ipxact.FieldReference(field_ref="ADDR"),
-                indirect_data_ref=ipxact.FieldReference(field_ref="DATA"),
+                indirect_address_ref=ipxact.FieldReference(field_ref=ipxact.IndexedRef("ADDR")),
+                indirect_data_ref=ipxact.FieldReference(field_ref=ipxact.IndexedRef("DATA")),
             )
         ],
     )
@@ -184,7 +184,7 @@ def test_driver_with_range_but_no_value_is_rejected():
                     name="p",
                     wire=ipxact.WirePort(
                         direction=ipxact.Direction.OUT,
-                        drivers=[ipxact.Driver(range_left="7", range_right="0")],
+                        drivers=[ipxact.Driver(range=ipxact.Range(ipxact.Expression("7"), ipxact.Expression("0")))],
                     ),
                 )
             ]
@@ -194,39 +194,34 @@ def test_driver_with_range_but_no_value_is_rejected():
         component_to_bytes(component)
 
 
-def _component_with_write_value_constraint(constraint: ipxact.WriteValueConstraint) -> ipxact.Component:
+def _component_with_field(field: ipxact.Field) -> ipxact.Component:
     return ipxact.Component(
-        vlnv=_vlnv("bad-write-value-constraint"),
+        vlnv=_vlnv("bad-field"),
         memory_maps=[
             ipxact.MemoryMap(
                 name="mm",
                 items=[
                     ipxact.AddressBlock(
                         name="block",
-                        range="0x10",
-                        width="32",
-                        base_address="0x0",
-                        registers=[
-                            ipxact.Register(
-                                name="R",
-                                address_offset="0x0",
-                                size="32",
-                                fields=[
-                                    ipxact.Field(
-                                        name="F",
-                                        bit_offset="0",
-                                        bit_width="1",
-                                        field_access_policies=[
-                                            ipxact.FieldAccessPolicy(write_value_constraint=constraint)
-                                        ],
-                                    )
-                                ],
-                            )
-                        ],
+                        range=ipxact.Expression("0x10"),
+                        width=ipxact.Expression("32"),
+                        base_address=ipxact.Expression("0x0"),
+                        registers=[ipxact.Register(name="R", address_offset=ipxact.Expression("0x0"), size=ipxact.Expression("32"), fields=[field])],
                     )
                 ],
             )
         ],
+    )
+
+
+def _component_with_write_value_constraint(constraint: ipxact.WriteValueConstraint) -> ipxact.Component:
+    return _component_with_field(
+        ipxact.Field(
+            name="F",
+            bit_offset=ipxact.Expression("0"),
+            bit_width=ipxact.Expression("1"),
+            field_access_policies=[ipxact.FieldAccessPolicy(write_value_constraint=constraint)],
+        )
     )
 
 
@@ -237,6 +232,12 @@ def test_write_value_constraint_with_no_arm_set_is_rejected():
 
 
 def test_write_value_constraint_with_only_minimum_is_rejected():
-    component = _component_with_write_value_constraint(ipxact.WriteValueConstraint(minimum="0"))
+    component = _component_with_write_value_constraint(ipxact.WriteValueConstraint(minimum=ipxact.Expression("0")))
     with pytest.raises(ValueError, match="write_as_read, use_enumerated_values"):
+        component_to_bytes(component)
+
+
+def test_field_without_bit_width_alias_or_definition_ref_is_rejected():
+    component = _component_with_field(ipxact.Field(name="F", bit_offset=ipxact.Expression("0")))
+    with pytest.raises(ValueError, match="bit_width, alias_of or field_definition_ref"):
         component_to_bytes(component)

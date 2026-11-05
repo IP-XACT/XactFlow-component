@@ -74,8 +74,9 @@ planned later addition, not an oversight.
   an element while the corresponding Python fields are trailing optionals. Every writer here
   follows the schema.
 - **Expressions are written verbatim.** Anything typed `Expression` in `ipxact-compiler`
-  (`addressOffset`, `size`, `range`, `width`, `bitOffset`, `bitWidth`, ...) is a raw string and is
-  emitted unchanged, never evaluated or reformatted.
+  (`addressOffset`, `size`, `range`, `width`, `bitOffset`, `bitWidth`, ...) keeps its raw text in
+  `.value`, which is emitted unchanged, never evaluated or reformatted, together with its
+  `minimum`/`maximum`, `xml:id` and attributes from other namespaces.
 - **Vendor extensions stay identical.** Their content is not IP-XACT's to define, so each
   fragment is re-inserted as parsed.
 - **Defaults are omitted.** Attributes and elements whose value equals the schema default
@@ -90,33 +91,18 @@ planned later addition, not an oversight.
 
 ## Known gaps
 
-These come from constructs the IEEE 1685-2022 schema requires but `ipxact-compiler`'s object model
-deliberately does not carry. Such a component still round-trips through this writer and back
-through the parser unchanged, but the XML it produces will not satisfy the XSD:
+Since `ipxact-compiler` 0.2.0, its object model covers the whole IEEE 1685-2022 `component` schema,
+and this writer writes every part of it, `*DefinitionRef` references included (they are written
+as references, not resolved). One gap is left:
 
 - **`externalTypeDefinitions` has an optional name.** The schema's `nameGroup` requires one.
-- **`File.dependencies` is write-only.** `ipxact-compiler`'s `parse_file` does not read `dependency`
-  children of a `file` back, so setting them means the value is written but does not survive a
-  re-parse. (`FileSet.dependencies` round-trips normally.)
-- **`MemoryArray.stride` on a register or register file is write-only.** This writer emits
-  `ipxact:stride` correctly, but `ipxact-compiler` reads it with a truth test on the element, which
-  is false for a childless element, so the value comes back as `None`. `bitStride` on a field is
-  unaffected.
 
 The writer also does not invent content the object model leaves out, so a `Component` that is
 under-specified relative to the schema produces XML that says so: a `register` with no fields, a
 `memoryRemap` with no `modeRef`, a `channel` with fewer than two `busInterfaceRef`s, a `file` with
 no `fileType`, or a `componentGenerator` with more than one `transportMethod` will each fail
-validation rather than being silently patched up. Validating the output against `component.xsd` is
-the way to catch that.
-
-Other deliberate simplifications, all inherited from `ipxact-compiler`'s object model, so there is
-nothing to write: `accessHandles`, `executableImage`, `powerConstraints`, `wireTypeDefs`/
-`domainTypeDefs`/`signalTypeDefs`/`transTypeDefs`, `portPackets`, a port's `arrays`/`access`, a
-`portMap`'s logical `range` and physical `partSelect`/`subPort`, `clearboxElementRefs`,
-`fileSet/function`, a `file`'s `define`/`imageType`/`targetName`, `viewLinks`/`modeLinks`/
-`resetTypeLinks`, a field's `aliasOf` alternative, and the `*DefinitionRef` type-definition
-indirection on memory map elements.
+validation rather than being silently patched up. `ipxact.validate()` checks the output against
+the XSD shipped with `ipxact-compiler`, and is the way to catch that.
 
 ## Development
 
@@ -126,10 +112,12 @@ pytest
 ```
 
 The tests round-trip both `ipxact-compiler`'s `apb_uart.xml` fixture and hand-built components
-through the writer and back through the parser, validate the written XML against `component.xsd`
-with `lxml.etree.XMLSchema.assertValid`, and re-run `xactflow.SCR.run_single_doc_checks` on the
-result. They expect `ipxact-compiler` and the IEEE 1685-2022 schema (`IEEE_1685-2022/schema/
-1685-2022/`) as sibling checkouts; set `IPXACT_SCHEMA_DIR` to point the schema somewhere else.
+through the writer and back through the parser, validate the written XML against the
+`component.xsd` shipped with `ipxact-compiler`, and re-run `xactflow.SCR.run_single_doc_checks` on
+the result. Between them, the hand-built components set every field of every dataclass a
+`Component` can contain, and a test fails when one is not set, so a field added to
+`ipxact-compiler` cannot be missed by the writer unnoticed. The `apb_uart.xml` tests expect
+`ipxact-compiler` as a sibling checkout and are skipped without it.
 
 ## License
 

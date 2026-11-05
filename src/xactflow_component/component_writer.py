@@ -41,7 +41,7 @@ def write_component(component: Component) -> etree._Element:
 
     Child order follows component.xsd's componentType sequence.
     """
-    root = element("component")
+    root = element("component", xml_id=component.xml_id)
     root.set(f"{{{XSI_NAMESPACE}}}schemaLocation", SCHEMA_LOCATION)
     add_vlnv(root, component.vlnv)
     add_text(root, "displayName", component.display_name)
