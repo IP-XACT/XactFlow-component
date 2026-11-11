@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 import re
 from pathlib import Path
 
 import ipxact
 from lxml import etree
-from xactflow import Exporter
+from xactflow import Exporter, Library
 
 from .common_writer import qn
 from .component_writer import component_to_bytes, write_component, write_component_file
@@ -22,25 +22,36 @@ __all__ = [
 
 
 class ComponentExporter(Exporter):
-    """Serialize an ipxact.Component into an IEEE 1685-2022 IP-XACT component XML file.
+    """Serialize the ipxact.Component targets of a Library into IEEE 1685-2022 IP-XACT component
+    XML files.
 
-    The output file is named <vendor>_<library>_<name>_<version>.xml into output_dir.
+    Each component is written to <vendor>_<library>_<name>_<version>.xml into output_dir. Targets
+    of another type, and components that are only there to be looked up, are not written.
     """
 
     name = "component"
 
-    def export(self, subject: object, output_dir: Path, **options: object) -> None:
-        if not isinstance(subject, ipxact.Component):
-            # LinkedDesign support (flattening a resolved multi-instance design into one
-            # boundary Component) is an agreed-on later addition.
-            raise TypeError(
-                f"xactflow-component only supports ipxact.Component, got {type(subject).__name__}"
-            )
+    def export(self, library: Library, output_dir: Path, **options: object) -> None:
+        components = list(library.targets(ipxact.Component))
+        if not components:
+            # Writing a design target as a component (flattening a resolved multi-instance design
+            # into one boundary Component) is an agreed-on later addition.
+            raise TypeError("xactflow-component needs an ipxact.Component target, the library has none")
         output_dir = Path(output_dir)
-        path = output_dir / _file_name(subject.vlnv)
-        _check_overwrite(path, subject.vlnv)
+        # Every file name is checked before any file is written, so a rejected target leaves
+        # output_dir as it was.
+        paths = {}
+        for component in components:
+            path = output_dir / _file_name(component.vlnv)
+            if path in paths:
+                raise FileExistsError(
+                    f"{paths[path].vlnv} and {component.vlnv} would both be written to {path}"
+                )
+            _check_overwrite(path, component.vlnv)
+            paths[path] = component
         output_dir.mkdir(parents=True, exist_ok=True)
-        write_component_file(subject, path)
+        for path, component in paths.items():
+            write_component_file(component, path)
 
 
 _FILE_NAME_PART = re.compile(r"[A-Za-z0-9._-]+")

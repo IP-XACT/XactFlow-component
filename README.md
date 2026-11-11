@@ -29,18 +29,24 @@ Requires Python >= 3.9.
 from pathlib import Path
 
 import ipxact
+from xactflow import Library
 from xactflow_component import ComponentExporter
 
-component = ipxact.parse_file("apb_uart.xml")   # or get one from an importer
-ComponentExporter().export(component, Path("out"))
+library = Library()
+library.add(ipxact.parse_file("apb_uart.xml"), target=True)   # or let an importer add it
+ComponentExporter().export(library, Path("out"))
 # writes out/<vendor>_<library>_<name>_<version>.xml
 ```
 
-The output file is named after the component's full VLNV (`<vendor>_<library>_<name>_<version>.xml`)
+`export()` writes every `ipxact.Component` added to the library with `target=True`. Other targets,
+and components that are only there to be looked up, are not written.
+
+Each output file is named after the component's full VLNV (`<vendor>_<library>_<name>_<version>.xml`)
 inside `output_dir`, which is created if it does not exist. Each VLNV part may only hold letters,
 digits, `.`, `_` and `-`; anything else raises `ValueError`. Exporting the same component again
-replaces its file, but a file of that name holding anything else (another VLNV, or not a component)
-raises `FileExistsError`.
+replaces its file, but a file of that name holding anything else (another VLNV, or not a component),
+or two targets that would share a file name, raise `FileExistsError`. All of this is checked before
+any file is written.
 
 Lower-level entry points are available for callers that want the tree or the bytes rather than a
 file:
@@ -54,19 +60,18 @@ path = write_component_file(component, "out.xml") # writes and returns the path
 ```
 
 Once installed, the exporter registers itself under the `xactflow.exporters` entry point group as
-`component`. From the XactFlow CLI, use it after an importer with `--then component`:
+`component`. From the XactFlow CLI, run it on a component file, or after an importer with
+`--then component`:
 
 ```bash
+xactflow component uart.xml --output out/
 xactflow sv uart.sv --option metadata=uart_ipxact.json --then component --output out/
-# writes out/<vendor>_<library>_uart_<version>.xml
+# both write out/<vendor>_<library>_uart_<version>.xml
 ```
 
-The `xactflow component <design>` subcommand links a design first and passes the result to the
-exporter, so it fails until `LinkedDesign` is supported (see below).
-
-`export()` raises `TypeError` for anything that is not an `ipxact.Component`. Accepting a
-`LinkedDesign` (flattening a resolved multi-instance design into one boundary component) is a
-planned later addition, not an oversight.
+`export()` raises `TypeError` when the library has no `ipxact.Component` target, e.g. for
+`xactflow component design.xml`. Writing a design as a component (flattening a resolved
+multi-instance design into one boundary component) is a planned later addition, not an oversight.
 
 ## Design notes
 
